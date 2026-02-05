@@ -3,7 +3,6 @@ import java.util.Properties
 
 plugins {
 	alias(libs.plugins.android.application)
-	alias(libs.plugins.jetbrainsKotlinAndroid)
 	alias(libs.plugins.google.devtools.ksp)
 	alias(libs.plugins.kotlinx.serialization)
 	alias(libs.plugins.google.protobuf)
