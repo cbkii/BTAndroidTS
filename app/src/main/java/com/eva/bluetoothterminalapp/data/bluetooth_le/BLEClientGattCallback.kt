@@ -1,6 +1,7 @@
 package com.eva.bluetoothterminalapp.data.bluetooth_le
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
@@ -13,7 +14,9 @@ import com.eva.bluetoothterminalapp.data.mapper.toDomainModelWithName
 import com.eva.bluetoothterminalapp.data.mapper.toDomainModelWithNames
 import com.eva.bluetoothterminalapp.data.samples.SampleUUIDReader
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.enums.BLEConnectionState
+import com.eva.bluetoothterminalapp.domain.bluetooth_le.enums.BLEPhysicalChannels
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLECharacteristicsModel
+import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEConnectionEvents
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEDescriptorModel
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEServiceModel
 import kotlinx.collections.immutable.toPersistentList
@@ -21,7 +24,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -38,9 +44,6 @@ class BLEClientGattCallback(
 
 	private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-	private val _deviceRssi = MutableStateFlow(0)
-	val deviceRssi = _deviceRssi.asStateFlow()
-
 	private val _connectionState = MutableStateFlow(BLEConnectionState.CONNECTING)
 	val connectionState = _connectionState.asStateFlow()
 
@@ -54,11 +57,18 @@ class BLEClientGattCallback(
 	private val _readCharacteristic = MutableStateFlow<BLECharacteristicsModel?>(null)
 	val readCharacteristics = _readCharacteristic.asStateFlow()
 
-	override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+	private val _events = MutableSharedFlow<BLEConnectionEvents>(
+		replay = 1,
+		onBufferOverflow = BufferOverflow.DROP_OLDEST
+	)
+	val connEvents = _events.asSharedFlow()
 
+	override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
 		if (status != BluetoothGatt.GATT_SUCCESS) {
 			_connectionState.update { BLEConnectionState.FAILED }
 			Log.e(GATT_LOGGER, "PROBLEM WITH CONNECTION STATUS CODE: $status")
+			Log.d(GATT_LOGGER, "CLOSING CONNECTION")
+			gatt?.close()
 			return
 		}
 
@@ -88,7 +98,26 @@ class BLEClientGattCallback(
 		if (status != BluetoothGatt.GATT_SUCCESS) return
 		Log.d(GATT_LOGGER, "READING RSSI SUCCESSFUL")
 		// update rssi value
-		_deviceRssi.update { rssi }
+		_events.tryEmit(BLEConnectionEvents.OnRSSIUpdated(rssi))
+	}
+
+	override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		Log.d(GATT_LOGGER, "UPDATING MTU SUCCESSFUL :$mtu")
+		_events.tryEmit(BLEConnectionEvents.OnMTUUpdated(mtu))
+	}
+
+	override fun onPhyRead(gatt: BluetoothGatt?, txPhy: Int, rxPhy: Int, status: Int) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		Log.d(GATT_LOGGER, "PHY READ TX:$txPhy RX:$rxPhy")
+	}
+
+	override fun onPhyUpdate(gatt: BluetoothGatt?, txPhy: Int, rxPhy: Int, status: Int) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		val txChannel = txPhy.toBLPhy()
+		val rxChannel = rxPhy.toBLPhy()
+		Log.d(GATT_LOGGER, "PHY READ UPDATED TX:$txChannel RX:$rxChannel")
+		_events.tryEmit(BLEConnectionEvents.OnPhyUpdated(txChannel, rxChannel))
 	}
 
 	override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
@@ -274,7 +303,9 @@ class BLEClientGattCallback(
 		}
 	}
 
-	fun cleanUp() = scope.cancel()
+	fun cleanUp() {
+		scope.cancel()
+	}
 
 	fun findCharacteristicFromDomainModel(
 		service: BLEServiceModel,
@@ -297,4 +328,11 @@ class BLEClientGattCallback(
 			?.getDescriptor(descriptor.uuid)
 	}
 
+
+	private fun Int.toBLPhy() = when (this) {
+		BluetoothDevice.PHY_LE_CODED -> BLEPhysicalChannels.LE_CODED
+		BluetoothDevice.PHY_LE_1M -> BLEPhysicalChannels.LE_1M
+		BluetoothDevice.PHY_LE_2M -> BLEPhysicalChannels.LE_2M
+		else -> throw IllegalArgumentException("Invalid transmission value")
+	}
 }

@@ -9,4 +9,6 @@ sealed interface BLEDeviceConfigEvent {
 	data object OnReadRssiStrength : BLEDeviceConfigEvent
 
 	data object OnReDiscoverServices : BLEDeviceConfigEvent
+
+	data class OnUpdateMTU(val newValue: Int) : BLEDeviceConfigEvent
 }
