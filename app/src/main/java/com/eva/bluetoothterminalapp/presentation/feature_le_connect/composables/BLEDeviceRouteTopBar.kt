@@ -48,6 +48,17 @@ fun BLEDeviceRouteTopBar(
 	var isMenuExpanded by remember { mutableStateOf(false) }
 	var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
 
+	var showRequestMTUDialog by remember { mutableStateOf(false) }
+
+	BLEDeviceRequestMTUDialog(
+		showDialog = showRequestMTUDialog,
+		onDismissRequest = { showRequestMTUDialog = false },
+		onRequestValue = { unit ->
+			onConfigEvent(BLEDeviceConfigEvent.OnUpdateMTU(unit))
+			showRequestMTUDialog = false
+		},
+	)
+
 	MediumTopAppBar(
 		title = { Text(text = stringResource(id = R.string.ble_client_screen_title)) },
 		actions = {
@@ -99,6 +110,13 @@ fun BLEDeviceRouteTopBar(
 						text = { Text(text = stringResource(R.string.ble_device_profile_action_refresh_services)) },
 						enabled = connectionState == BLEConnectionState.CONNECTED,
 						onClick = { onConfigEvent(BLEDeviceConfigEvent.OnReDiscoverServices) },
+						colors = MenuDefaults
+							.itemColors(leadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer)
+					)
+					DropdownMenuItem(
+						text = { Text(text = stringResource(R.string.ble_device_profile_action_request_mtu)) },
+						enabled = connectionState == BLEConnectionState.CONNECTED,
+						onClick = { showRequestMTUDialog = true },
 						colors = MenuDefaults
 							.itemColors(leadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer)
 					)
