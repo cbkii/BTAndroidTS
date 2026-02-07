@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
 
@@ -36,11 +37,11 @@ class LightSensorReaderImpl(private val context: Context) : LightSensorReader {
 	@OptIn(ExperimentalCoroutinesApi::class)
 	override suspend fun readCurrentValue(): Float? = suspendCancellableCoroutine { cont ->
 		if (!_isSensorAvailable) {
-			cont.resume(null, onCancellation = {})
+			cont.resume(null)
 			return@suspendCancellableCoroutine
 		}
 		val sensor = _lightSensor ?: run {
-			cont.resume(null, onCancellation = {})
+			cont.resume(null)
 			return@suspendCancellableCoroutine
 		}
 
@@ -49,7 +50,7 @@ class LightSensorReaderImpl(private val context: Context) : LightSensorReader {
 			override fun onSensorChanged(event: SensorEvent?) {
 				val lux = event?.values?.firstOrNull()
 				if (cont.isActive) {
-					cont.resume(lux, onCancellation = {})
+					cont.resume(lux)
 					_sensorManager?.unregisterListener(this)
 					Log.d(TAG, "LIGHT SENSOR LISTENER UN-REGISTERED")
 				}
@@ -62,7 +63,7 @@ class LightSensorReaderImpl(private val context: Context) : LightSensorReader {
 
 		if (!registered) {
 			Log.e(TAG, "CANNOT REGISTER FOR SENSOR")
-			cont.resume(null, onCancellation = null)
+			cont.resume(null)
 			return@suspendCancellableCoroutine
 		}
 		Log.d(TAG, "LIGHT SENSOR LISTENER REGISTERED")

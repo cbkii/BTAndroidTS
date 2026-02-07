@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.BluetoothLEClientConnector
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLECharacteristicsModel
+import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEConnectionEvents
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEDescriptorModel
 import com.eva.bluetoothterminalapp.presentation.feature_le_connect.state.BLECharacteristicEvent
 import com.eva.bluetoothterminalapp.presentation.feature_le_connect.state.BLEDeviceConfigEvent
@@ -24,6 +25,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -45,22 +50,33 @@ class BLEDeviceViewModel(
 		selectedCharacteristic,
 		bleConnector.isNotifyOrIndicationRunning,
 		transform = ::readCharacteristics
-	).onStart { initiateConnection() }
+	).onStart {
+		initiateConnection()
+		observeBLEEvents()
+	}.stateIn(
+		scope = viewModelScope,
+		started = SharingStarted.WhileSubscribed(10_000),
+		initialValue = null
+	)
+
+	private val deviceRssi = bleConnector.connEvents
+		.filterIsInstance<BLEConnectionEvents.OnRSSIUpdated>()
+		.map { it.rssi }
 		.stateIn(
 			scope = viewModelScope,
-			started = SharingStarted.WhileSubscribed(10_000),
-			initialValue = null
+			started = SharingStarted.Eagerly,
+			initialValue = 0
 		)
 
 	val bLEProfile = combine(
-		bleConnector.deviceRssi,
+		deviceRssi,
 		bleConnector.bleServices,
 		bleConnector.connectionState,
-	) { deviceRssi, services, connectState ->
+	) { rssi, services, connectState ->
 		BLEDeviceProfileState(
 			connectionState = connectState,
 			device = bleConnector.connectedDevice,
-			signalStrength = deviceRssi,
+			signalStrength = rssi,
 			services = services.toImmutableList()
 		)
 	}.stateIn(
@@ -77,7 +93,7 @@ class BLEDeviceViewModel(
 	override val uiEvents: SharedFlow<UiEvents>
 		get() = _uiEvents.asSharedFlow()
 
-	private val navArgs: BluetoothDeviceArgs?
+	private val navArgs: BluetoothDeviceArgs
 		get() = savedStateHandle.navArgs()
 
 	private val isNotifyOrIndicationRunning: Boolean
@@ -125,6 +141,7 @@ class BLEDeviceViewModel(
 			BLEDeviceConfigEvent.OnReDiscoverServices -> onRefreshServices()
 			BLEDeviceConfigEvent.OnDisconnectEvent -> bleConnector.disconnect()
 			BLEDeviceConfigEvent.OnReconnectEvent -> onClientReconnect()
+			is BLEDeviceConfigEvent.OnUpdateMTU -> onUpdateMTU(event.newValue)
 		}
 	}
 
@@ -171,12 +188,7 @@ class BLEDeviceViewModel(
 	}
 
 	private fun initiateConnection() {
-		val address = navArgs?.address ?: return run {
-			viewModelScope.launch {
-				val event = UiEvents.ShowSnackBar("Cannot find the given address")
-				_uiEvents.emit(event)
-			}
-		}
+		val address = navArgs.address
 		// being connection
 		viewModelScope.launch {
 			bleConnector.connect(address)
@@ -271,37 +283,42 @@ class BLEDeviceViewModel(
 
 	private fun onRefreshRSSI() = viewModelScope.launch {
 		val result = bleConnector.checkRssi()
-		result.fold(
-			onSuccess = { isOk ->
-				val message = if (isOk) "Refreshed RSSI" else "Failed to refresh"
-				_uiEvents.emit(UiEvents.ShowToast(message))
-			},
-			onFailure = { error ->
-				val error = error.message ?: "Cannot perform refresh"
-				_uiEvents.emit(UiEvents.ShowSnackBar(error))
-			},
-		)
+		if (result.isSuccess) return@launch
+
+		val error = result.exceptionOrNull()?.message ?: "Cannot perform refresh"
+		_uiEvents.emit(UiEvents.ShowSnackBar(error))
+
 	}
 
 	private fun onRefreshServices() = viewModelScope.launch {
 		val result = bleConnector.discoverServices()
-		result.fold(
-			onSuccess = { isOk ->
-				val message = if (isOk) "Refreshed Services" else "Failed to refresh"
-				_uiEvents.emit(UiEvents.ShowToast(message))
-			},
-			onFailure = { error ->
-				val error = error.message ?: "Cannot perform refresh"
-				_uiEvents.emit(UiEvents.ShowSnackBar(error))
-			},
-		)
+		if (result.isSuccess) return@launch
 
+		val error = result.exceptionOrNull()?.message ?: "Cannot perform refresh"
+		_uiEvents.emit(UiEvents.ShowSnackBar(error))
+	}
+
+	private fun onUpdateMTU(unit: Int) = viewModelScope.launch {
+		val result = bleConnector.onUpdateMTU(unit)
+		if (result.isSuccess) return@launch
+
+		val error = result.exceptionOrNull()?.message ?: "Cannot update mtu"
+		_uiEvents.emit(UiEvents.ShowSnackBar(error))
+	}
+
+	private fun observeBLEEvents() {
+
+		bleConnector.connEvents.onEach { event ->
+			val message = when (event) {
+				is BLEConnectionEvents.OnMTUUpdated -> "Device MTU updated :${event.mtu}"
+				is BLEConnectionEvents.OnPhyUpdated -> "Device phy updated"
+				is BLEConnectionEvents.OnRSSIUpdated -> "Device RSSI updated"
+			}
+			_uiEvents.emit(UiEvents.ShowToast(message))
+		}.launchIn(viewModelScope)
 	}
 
 	override fun onCleared() {
-		// close the ble connection
 		bleConnector.close()
-		// clear the viewmodel
-		super.onCleared()
 	}
 }

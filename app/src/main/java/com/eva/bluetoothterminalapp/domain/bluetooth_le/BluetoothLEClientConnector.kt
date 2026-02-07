@@ -4,6 +4,7 @@ import com.eva.bluetoothterminalapp.domain.bluetooth.models.BluetoothDeviceModel
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.enums.BLEConnectionState
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.enums.BLEPropertyTypes
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLECharacteristicsModel
+import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEConnectionEvents
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEDescriptorModel
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEServiceModel
 import kotlinx.coroutines.flow.Flow
@@ -20,7 +21,7 @@ interface BluetoothLEClientConnector {
 	/**
 	 * Receive signal strength of the device
 	 */
-	val deviceRssi: StateFlow<Int>
+	val connEvents: Flow<BLEConnectionEvents>
 
 	/**
 	 * Available [BLEServiceModel] with the current selected service
@@ -116,6 +117,8 @@ interface BluetoothLEClientConnector {
 		enable: Boolean,
 	): Result<Boolean>
 
+
+	fun onUpdateMTU(mtu: Int): Result<Boolean>
 
 	/**
 	 * Rediscover available services for the device

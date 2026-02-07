@@ -20,6 +20,7 @@ import com.eva.bluetoothterminalapp.domain.bluetooth.models.BluetoothDeviceModel
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.BluetoothLEClientConnector
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.enums.BLEConnectionState
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLECharacteristicsModel
+import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEConnectionEvents
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEDescriptorModel
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEServiceModel
 import com.eva.bluetoothterminalapp.domain.exceptions.BLEIndicationOrNotifyRunningException
@@ -28,6 +29,7 @@ import com.eva.bluetoothterminalapp.domain.exceptions.BluetoothNotEnabled
 import com.eva.bluetoothterminalapp.domain.exceptions.BluetoothPermissionNotProvided
 import com.eva.bluetoothterminalapp.domain.exceptions.InvalidBLEConfigurationException
 import com.eva.bluetoothterminalapp.domain.exceptions.InvalidDeviceAddressException
+import com.eva.bluetoothterminalapp.domain.exceptions.InvalidMTUValueException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,8 +54,8 @@ class AndroidBLEClientConnector(
 	override val connectionState: StateFlow<BLEConnectionState>
 		get() = _gattCallback.connectionState
 
-	override val deviceRssi: StateFlow<Int>
-		get() = _gattCallback.deviceRssi
+	override val connEvents: Flow<BLEConnectionEvents>
+		get() = _gattCallback.connEvents
 
 	override val bleServices: Flow<List<BLEServiceModel>>
 		get() = _gattCallback.bleGattServices
@@ -127,6 +129,18 @@ class AndroidBLEClientConnector(
 			val result = _bLEGatt?.connect() ?: false
 			Result.success(result)
 		} catch (e: Exception) {
+			Result.failure(e)
+		}
+	}
+
+	override fun onUpdateMTU(mtu: Int): Result<Boolean> {
+		return try {
+			if (mtu !in 23..517) return Result.failure(InvalidMTUValueException())
+			Log.i(TAG, "REQUESTING MTU UPDATE")
+			val result = _bLEGatt?.requestMtu(mtu) ?: false
+			Result.success(result)
+		} catch (e: Exception) {
+			Log.d(TAG, "FAILED TO UPDATE MTU", e)
 			Result.failure(e)
 		}
 	}
