@@ -12,12 +12,12 @@ plugins {
 
 android {
 	namespace = "com.eva.bluetoothterminalapp"
-	compileSdk = 36
+	compileSdk = libs.versions.android.compilesdk.get().toInt()
 
 	defaultConfig {
 		applicationId = "com.eva.bluetoothterminalapp"
-		minSdk = 29
-		targetSdk = 36
+		minSdk = libs.versions.android.minsdk.get().toInt()
+		targetSdk = libs.versions.android.targetsdk.get().toInt()
 		versionCode = 5
 		versionName = "1.2.1"
 
@@ -56,7 +56,6 @@ android {
 	buildTypes {
 
 		debug {
-			resValue("string", "app_name", "BluetoothTerminalApp (Debug)")
 			applicationIdSuffix = ".debug"
 			isMinifyEnabled = false
 			isShrinkResources = false
@@ -114,7 +113,6 @@ dependencies {
 	//lifecycle compose runtime
 	implementation(libs.androidx.lifecycle.runtime.compose)
 	//navigation
-	implementation(libs.compose.destination.animation)
 	implementation(libs.compose.destination.core)
 	ksp(libs.compose.destination.ksp)
 	//kotlinx
