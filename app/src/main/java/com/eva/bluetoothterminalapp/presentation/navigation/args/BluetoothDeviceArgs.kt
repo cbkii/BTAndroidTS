@@ -1,10 +1,9 @@
 package com.eva.bluetoothterminalapp.presentation.navigation.args
 
-import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
+import kotlinx.serialization.Serializable
 
-@Parcelize
+@Serializable
 data class BluetoothDeviceArgs(
 	val address: String,
 	val name: String? = null,
-) : Parcelable
+)

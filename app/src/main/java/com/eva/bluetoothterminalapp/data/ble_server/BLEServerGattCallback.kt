@@ -168,10 +168,12 @@ class BLEServerGattCallback(
 			val characteristicDeferred = service.characteristics.map { characteristic ->
 				async { characteristic.toDomainModelWithNames(uuidReader) }
 			}
-			domainService.probableName = serviceName.await()?.name
-			domainService.characteristic = characteristicDeferred.awaitAll().toPersistentList()
+			val updatedService = domainService.copy(
+				probableName = serviceName.await()?.name,
+				characteristics = characteristicDeferred.awaitAll().toPersistentList()
+			)
 
-			_services.update { previous -> (previous + domainService).distinctBy { it.serviceId } }
+			_services.update { previous -> (previous + updatedService).distinctBy { it.serviceId } }
 
 		}.invokeOnCompletion {
 			// inform new service is added

@@ -85,23 +85,27 @@ class AndroidBluetoothLEScanner(
 			if (result?.isConnectable == false) return
 			// if results has no address skip
 			val address = result?.device?.address ?: return
-			val deviceAddresses = _devices.value.map { it.deviceModel.address }
-			// if it's a new device
-			if (address !in deviceAddresses) {
+			val currentList = _devices.value
+			// find the idx of the device with address
+			val index = currentList.indexOfFirst { it.deviceModel.address == address }
+			// if not found it's a new device
+			if (index == -1) {
 				val newDevice = result.toDomainModel()
 				// add it to devices
 				_devices.update { devices -> devices + newDevice }
-				// then work is done
 				return
 			}
-			//if the address already present
-			val updatedList = _devices.value.map { device ->
-				// if address already present update the rssi of the device
-				if (device.deviceModel.address == address) device.copy(rssi = result.rssi)
-				// else return the normal device
-				else device
+			// if the address already present, only update if RSSI changed to avoid redundant StateFlow notifications
+			val existingDevice = currentList.getOrNull(index) ?: return
+			// if the rssi didn't change skip this
+			if (existingDevice.rssi == result.rssi) return
+			// otherwise update the rssi
+			_devices.update { devices ->
+				devices.mapIndexed { idx, device ->
+					if (idx == index) device.copy(rssi = result.rssi)
+					else device
+				}
 			}
-			_devices.update { updatedList }
 		}
 
 		override fun onScanFailed(errorCode: Int) {

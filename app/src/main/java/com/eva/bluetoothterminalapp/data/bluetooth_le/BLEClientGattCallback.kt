@@ -20,10 +20,9 @@ import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEConnectionEven
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEDescriptorModel
 import com.eva.bluetoothterminalapp.domain.bluetooth_le.models.BLEServiceModel
 import kotlinx.collections.immutable.toPersistentList
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,14 +34,12 @@ import kotlinx.coroutines.launch
 
 private const val GATT_LOGGER = "BLE_GATT_CALLBACK"
 
-@Suppress("DEPRECATION")
 @SuppressLint("MissingPermission")
 class BLEClientGattCallback(
 	private val reader: SampleUUIDReader,
 	private val echoWrite: Boolean = true,
+	private val scope: CoroutineScope = CoroutineScope(SupervisorJob())
 ) : BluetoothGattCallback() {
-
-	private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
 	private val _connectionState = MutableStateFlow(BLEConnectionState.CONNECTING)
 	val connectionState = _connectionState.asStateFlow()
@@ -139,6 +136,7 @@ class BLEClientGattCallback(
 	}
 
 	@Deprecated("Deprecated in Java")
+	@Suppress("DEPRECATION")
 	override fun onCharacteristicRead(
 		gatt: BluetoothGatt?,
 		characteristic: BluetoothGattCharacteristic?,
@@ -159,7 +157,6 @@ class BLEClientGattCallback(
 		if (status != BluetoothGatt.GATT_SUCCESS) return
 
 		Log.d(GATT_LOGGER, "READ CHARACTERISTICS :${characteristic.uuid}")
-
 		scope.launch {
 			try {
 				// decode the received value and decide it
@@ -173,6 +170,7 @@ class BLEClientGattCallback(
 
 				Log.d(GATT_LOGGER, "VALUE ON READ ${domainModel.byteArray}")
 			} catch (e: Exception) {
+				if (e is CancellationException) throw e
 				e.printStackTrace()
 				Log.e(GATT_LOGGER, "EXCEPTION", e)
 			}
@@ -192,6 +190,7 @@ class BLEClientGattCallback(
 	}
 
 	@Deprecated("Deprecated in Java")
+	@Suppress("DEPRECATION")
 	override fun onDescriptorRead(
 		gatt: BluetoothGatt?,
 		descriptor: BluetoothGattDescriptor?,
@@ -257,6 +256,7 @@ class BLEClientGattCallback(
 	}
 
 	@Deprecated("Deprecated in Java")
+	@Suppress("DEPRECATION")
 	override fun onCharacteristicChanged(
 		gatt: BluetoothGatt?,
 		characteristic: BluetoothGattCharacteristic?
@@ -303,9 +303,6 @@ class BLEClientGattCallback(
 		}
 	}
 
-	fun cleanUp() {
-		scope.cancel()
-	}
 
 	fun findCharacteristicFromDomainModel(
 		service: BLEServiceModel,

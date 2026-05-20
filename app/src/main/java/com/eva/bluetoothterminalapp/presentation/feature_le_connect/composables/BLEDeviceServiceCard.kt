@@ -141,7 +141,7 @@ fun BLEDeviceServiceCard(
 								)
 							}
 						}
-						bleService.characteristic.forEach { characteristic ->
+						bleService.characteristics.forEach { characteristic ->
 							SelectableBLECharacteristics(
 								characteristic = characteristic,
 								isSelected = characteristic == selectedCharacteristic,

@@ -8,7 +8,5 @@ data class BluetoothMessage(
 	val message: String,
 	val type: BluetoothMessageType,
 	val uuid: Uuid = Uuid.random(),
-) {
-	val logTime: Instant
-		get() = Clock.System.now()
-}
+	val logTime: Instant = Clock.System.now(),
+)

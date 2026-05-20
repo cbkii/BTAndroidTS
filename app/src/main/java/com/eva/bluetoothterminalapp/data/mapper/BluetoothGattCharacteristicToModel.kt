@@ -17,10 +17,9 @@ fun BluetoothGattCharacteristic.toDomainModel(probableName: String? = null): BLE
 		permission = permission,
 		properties = bleProperties,
 		writeType = bleWriteType,
-		descriptors = descriptors.map(BluetoothGattDescriptor::toModel).toPersistentList()
-	).apply {
-		this.probableName = probableName
-	}
+		descriptors = descriptors.map(BluetoothGattDescriptor::toModel).toPersistentList(),
+		probableName = probableName
+	)
 
 fun BluetoothGattCharacteristic.toDomainModel(
 	probableName: String? = null,
@@ -31,10 +30,10 @@ fun BluetoothGattCharacteristic.toDomainModel(
 	permission = permission,
 	properties = bleProperties,
 	writeType = bleWriteType,
-	descriptors = descriptors.toPersistentList()
-).apply {
-	this.probableName = probableName
-}
+	descriptors = descriptors.toPersistentList(),
+	probableName = probableName
+)
+
 
 /**
  * Characteristic contains properties of indicate

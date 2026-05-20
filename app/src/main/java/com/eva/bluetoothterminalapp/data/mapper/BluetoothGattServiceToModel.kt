@@ -8,15 +8,15 @@ import kotlinx.collections.immutable.toPersistentList
 
 fun BluetoothGattService.toDomainModel(
 	probableName: String? = null,
-	characteristic: List<BLECharacteristicsModel> = emptyList()
+	characteristics: List<BLECharacteristicsModel> = emptyList()
 ): BLEServiceModel = BLEServiceModel(
 	serviceId = instanceId,
 	serviceUUID = uuid,
 	serviceType = bleServiceType,
-).apply {
-	this.characteristic = characteristic.toPersistentList()
-	this.probableName = probableName
-}
+	characteristics = characteristics.toPersistentList(),
+	probableName = probableName
+)
+
 
 private val BluetoothGattService.bleServiceType: BLEServicesTypes
 	get() = when (this.type) {
