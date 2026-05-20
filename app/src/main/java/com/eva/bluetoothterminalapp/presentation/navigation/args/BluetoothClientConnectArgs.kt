@@ -1,11 +1,10 @@
 package com.eva.bluetoothterminalapp.presentation.navigation.args
 
-import android.os.Parcelable
-import kotlinx.parcelize.Parcelize
-import java.util.UUID
+import kotlinx.serialization.Serializable
+import kotlin.uuid.Uuid
 
-@Parcelize
+@Serializable
 data class BluetoothClientConnectArgs(
 	val address: String,
-	val uuid: UUID,
-) : Parcelable
+	val uuid: Uuid,
+)

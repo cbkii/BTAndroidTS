@@ -25,6 +25,7 @@ import com.ramcosta.composedestinations.generated.destinations.BtProfileDestinat
 import com.ramcosta.composedestinations.generated.destinations.ClientRouteDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
+import kotlin.uuid.toKotlinUuid
 
 @Destination<RootGraph>(
 	route = Routes.CLIENT_PROFILE_ROUTE,
@@ -52,7 +53,10 @@ fun AnimatedVisibilityScope.BTDeviceProfileScreen(
 			onEvent = viewmodel::onEvent,
 			onConnect = { uuid ->
 				navigator.navigate(
-					direction = ClientRouteDestination(address = args.address, uuid = uuid),
+					direction = ClientRouteDestination(
+						address = args.address,
+						uuid = uuid.toKotlinUuid()
+					),
 				) {
 					popUpTo(BtProfileDestination) {
 						inclusive = true

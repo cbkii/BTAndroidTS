@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.uuid.toJavaUuid
 
 private const val LOGGER = "BLUETOOTH_CLIENT_VIEW_MODEL"
 
@@ -138,7 +139,10 @@ class BTClientViewModel(
 		}
 		// create a client job to connect to the client
 		_connectAsClientJob = viewModelScope.launch {
-			val results = connector.connectClient(clientConnect.address, clientConnect.uuid)
+			val results = connector.connectClient(
+				clientConnect.address,
+				clientConnect.uuid.toJavaUuid()
+			)
 			results.fold(
 				onSuccess = {},
 				onFailure = { err ->
