@@ -25,7 +25,7 @@ suspend fun List<BluetoothGattService>.toDomainModelWithNames(
 		// return completed results
 		gattService.toDomainModel(
 			probableName = serviceName?.name,
-			characteristic = characteristicDeferred.awaitAll()
+			characteristics = characteristicDeferred.awaitAll()
 		)
 	}
 }

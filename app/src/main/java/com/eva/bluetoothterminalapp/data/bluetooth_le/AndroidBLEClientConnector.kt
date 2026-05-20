@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattConnectionSettings
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothStatusCodes
@@ -30,6 +31,12 @@ import com.eva.bluetoothterminalapp.domain.exceptions.BluetoothPermissionNotProv
 import com.eva.bluetoothterminalapp.domain.exceptions.InvalidBLEConfigurationException
 import com.eva.bluetoothterminalapp.domain.exceptions.InvalidDeviceAddressException
 import com.eva.bluetoothterminalapp.domain.exceptions.InvalidMTUValueException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asExecutor
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,14 +46,17 @@ import kotlinx.coroutines.flow.update
 private const val TAG = "BLE_CLIENT_LOGGER"
 
 @SuppressLint("MissingPermission")
-@Suppress("DEPRECATION")
 class AndroidBLEClientConnector(
 	private val context: Context,
 	private val reader: SampleUUIDReader,
 ) : BluetoothLEClientConnector {
 
+	private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
 	private val _bluetoothManager by lazy { context.getSystemService<BluetoothManager>() }
-	private val _gattCallback by lazy { BLEClientGattCallback(reader = reader, echoWrite = true) }
+	private val _gattCallback by lazy {
+		BLEClientGattCallback(reader = reader, echoWrite = true, scope = scope)
+	}
 
 	private val _btAdapter: BluetoothAdapter?
 		get() = _bluetoothManager?.adapter
@@ -86,19 +96,38 @@ class AndroidBLEClientConnector(
 			val device = _btAdapter?.getRemoteDevice(address) ?: return Result.success(false)
 			// update the device
 			_connectedDevice = device.toDomainModel()
+
 			// connect to the gatt server
-			_bLEGatt = device.connectGatt(
-				context,
-				autoConnect,
-				_gattCallback,
-				BluetoothDevice.TRANSPORT_LE
-			)
+			_bLEGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN) {
+				val settings = BluetoothGattConnectionSettings.Builder()
+					.setTransport(BluetoothDevice.TRANSPORT_LE)
+					.setAutoConnectEnabled(autoConnect)
+					.setOpportunisticEnabled(false)
+					.build()
+
+				// we can have a dedicated executor for the connected client
+				val ioDispatcher = Dispatchers.IO
+					.limitedParallelism(2, "bluetooth_connector_dispatcher")
+					.asExecutor()
+
+				device.connectGatt(settings, ioDispatcher, _gattCallback)
+			} else {
+				@Suppress("DEPRECATION")
+				device.connectGatt(
+					context,
+					autoConnect,
+					_gattCallback,
+					BluetoothDevice.TRANSPORT_LE
+				)
+			}
+
 			Log.d(TAG, "CONNECT GATT")
 			// load all files
 			reader.loadFromFiles()
 			// return success if there is no error
 			Result.success(true)
 		} catch (e: Exception) {
+			if (e is CancellationException) throw e
 			Result.failure(e)
 		}
 	}
@@ -185,7 +214,10 @@ class AndroidBLEClientConnector(
 				)
 				operation == BluetoothStatusCodes.SUCCESS
 			} else {
+				@Suppress("DEPRECATION")
 				gattCharacteristic.value = bytes
+
+				@Suppress("DEPRECATION")
 				_bLEGatt?.writeCharacteristic(gattCharacteristic) ?: false
 			}
 
@@ -320,7 +352,7 @@ class AndroidBLEClientConnector(
 		try {
 			_connectedDevice = null
 			// cancels the scope
-			_gattCallback.cleanUp()
+			scope.cancel()
 			reader.clearCache()
 			// close the gatt server
 			_bLEGatt?.close()
@@ -338,7 +370,10 @@ class AndroidBLEClientConnector(
 				val operation = _bLEGatt?.writeDescriptor(descriptor, bytes)
 				operation == BluetoothStatusCodes.SUCCESS
 			} else {
+				@Suppress("DEPRECATION")
 				descriptor.value = bytes
+
+				@Suppress("DEPRECATION")
 				_bLEGatt?.writeDescriptor(descriptor) ?: false
 			}
 			Result.success(isSuccess)

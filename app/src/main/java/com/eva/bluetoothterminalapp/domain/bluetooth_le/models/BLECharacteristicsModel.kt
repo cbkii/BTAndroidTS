@@ -16,16 +16,9 @@ data class BLECharacteristicsModel(
 	val writeType: BLEWriteTypes,
 	val descriptors: ImmutableList<BLEDescriptorModel> = persistentListOf(),
 	val byteArray: ByteArray = byteArrayOf(),
+	val probableName: String? = null,
 	private val isSetNotificationActive: Boolean = false,
 ) : BLEValueModel(byteArray) {
-
-	private var _probableName: String? = null
-
-	var probableName: String?
-		get() = _probableName
-		set(value) {
-			_probableName = value
-		}
 
 	val isIndicationRunning: Boolean
 		get() = BLEPropertyTypes.PROPERTY_INDICATE in properties && isSetNotificationActive
@@ -51,7 +44,6 @@ data class BLECharacteristicsModel(
 		if (writeType != other.writeType) return false
 		if (descriptors != other.descriptors) return false
 		if (!byteArray.contentEquals(other.byteArray)) return false
-		if (_probableName != other._probableName) return false
 		if (isIndicationRunning != other.isIndicationRunning) return false
 		if (isNotificationRunning != other.isNotificationRunning) return false
 		if (isIndicateOrNotify != other.isIndicateOrNotify) return false
@@ -69,7 +61,6 @@ data class BLECharacteristicsModel(
 		result = 31 * result + writeType.hashCode()
 		result = 31 * result + descriptors.hashCode()
 		result = 31 * result + byteArray.contentHashCode()
-		result = 31 * result + (_probableName?.hashCode() ?: 0)
 		result = 31 * result + isIndicationRunning.hashCode()
 		result = 31 * result + isNotificationRunning.hashCode()
 		result = 31 * result + isIndicateOrNotify.hashCode()
