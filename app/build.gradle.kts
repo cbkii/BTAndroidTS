@@ -7,7 +7,6 @@ plugins {
 	alias(libs.plugins.kotlinx.serialization)
 	alias(libs.plugins.google.protobuf)
 	alias(libs.plugins.compose.compiler)
-	id("kotlin-parcelize")
 }
 
 android {
@@ -18,8 +17,8 @@ android {
 		applicationId = "com.eva.bluetoothterminalapp"
 		minSdk = libs.versions.android.minsdk.get().toInt()
 		targetSdk = libs.versions.android.targetsdk.get().toInt()
-		versionCode = 5
-		versionName = "1.2.1"
+		versionCode = 6
+		versionName = "1.2.2"
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 		vectorDrawables {
@@ -58,7 +57,6 @@ android {
 		debug {
 			applicationIdSuffix = ".debug"
 			isMinifyEnabled = false
-			isShrinkResources = false
 		}
 
 		release {
