@@ -1,12 +1,19 @@
 package com.cbkii.btandroidts.presentation.feature_devices
 
 import android.os.Build
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -26,6 +33,8 @@ import com.cbkii.btandroidts.data.utils.hasBTScanPermission
 import com.cbkii.btandroidts.data.utils.hasLocationPermission
 import com.cbkii.btandroidts.domain.bluetooth.models.BluetoothDeviceModel
 import com.cbkii.btandroidts.domain.bluetooth_le.models.BluetoothLEDeviceModel
+import com.cbkii.btandroidts.domain.peripheral.CapabilityStatus
+import com.cbkii.btandroidts.domain.peripheral.PeripheralFeature
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BTDeviceRouteTopBar
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BTDevicesTabsLayout
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BluetoothDevicesList
@@ -95,54 +104,153 @@ fun BTDevicesRoute(
 		snackbarHost = { SnackbarHost(hostState = snackBarHostState) },
 		modifier = modifier.nestedScroll(scrollBehaviour.nestedScrollConnection),
 	) { scPadding ->
-		DevicesScreenModeContainer(
-			isActive = isBTActive,
-			hasPermission = hasBtPermission,
-			onBTPermissionChanged = { isGranted ->
-				hasBtPermission = isGranted
-				onEvent(BTDevicesScreenEvents.OnBTPermissionChanged(isGranted))
-			},
+		Column(
+			verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.sc_padding)),
 			modifier = Modifier
 				.fillMaxSize()
 				.padding(scPadding)
 		) {
-			BTDevicesTabsLayout(
+			Ts18DashboardHeader(
+				state = state,
 				isScanning = isScanning,
-				initialTab = initialTab,
-				onCurrentTabChanged = { type ->
-					currentTab = type
-					onEvent(BTDevicesScreenEvents.OnStopAnyRunningScan)
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(horizontal = dimensionResource(R.dimen.sc_padding))
+			)
+			DevicesScreenModeContainer(
+				isActive = isBTActive,
+				hasPermission = hasBtPermission,
+				onBTPermissionChanged = { isGranted ->
+					hasBtPermission = isGranted
+					onEvent(BTDevicesScreenEvents.OnBTPermissionChanged(isGranted))
 				},
-				classicTabContent = {
-					BluetoothDevicesList(
-						pairedDevices = state.pairedDevices,
-						availableDevices = state.availableDevices,
-						isPairedDevicesReady = state.isPairedDevicesLoaded,
-						showLocationPlaceholder = showLocationBlock,
-						onSelectDevice = onSelectDevice,
-						contentPadding = PaddingValues(all = dimensionResource(R.dimen.sc_padding)),
-						onLocationPermsAccept = { isGranted ->
-							hasLocationPermission = isGranted
-							onEvent(BTDevicesScreenEvents.OnLocationPermissionChanged(isGranted))
-						},
-						modifier = Modifier.fillMaxSize(),
-					)
-				},
-				leTabContent = {
-					BluetoothLeDeviceList(
-						hasLocationPermission = hasLocationPermission,
-						leDevices = state.leDevices,
-						onDeviceSelect = onSelectLeDevice,
-						contentPadding = PaddingValues(all = dimensionResource(R.dimen.sc_padding)),
-						onLocationPermissionChanged = { isAccepted ->
-							hasLocationPermission = isAccepted
-						},
-						modifier = Modifier.fillMaxSize(),
-					)
-				},
+				modifier = Modifier
+					.fillMaxWidth()
+					.weight(1f)
+			) {
+				BTDevicesTabsLayout(
+					isScanning = isScanning,
+					initialTab = initialTab,
+					onCurrentTabChanged = { type ->
+						currentTab = type
+						onEvent(BTDevicesScreenEvents.OnStopAnyRunningScan)
+					},
+					modifier = Modifier.fillMaxSize(),
+					classicTabContent = {
+						BluetoothDevicesList(
+							pairedDevices = state.pairedDevices,
+							availableDevices = state.availableDevices,
+							isPairedDevicesReady = state.isPairedDevicesLoaded,
+							showLocationPlaceholder = showLocationBlock,
+							onSelectDevice = onSelectDevice,
+							contentPadding = PaddingValues(all = dimensionResource(R.dimen.sc_padding)),
+							onLocationPermsAccept = { isGranted ->
+								hasLocationPermission = isGranted
+								onEvent(BTDevicesScreenEvents.OnLocationPermissionChanged(isGranted))
+							},
+							modifier = Modifier.fillMaxSize(),
+						)
+					},
+					leTabContent = {
+						BluetoothLeDeviceList(
+							hasLocationPermission = hasLocationPermission,
+							leDevices = state.leDevices,
+							onDeviceSelect = onSelectLeDevice,
+							contentPadding = PaddingValues(all = dimensionResource(R.dimen.sc_padding)),
+							onLocationPermissionChanged = { isAccepted ->
+								hasLocationPermission = isAccepted
+							},
+							modifier = Modifier.fillMaxSize(),
+						)
+					},
+				)
+			}
+		}
+	}
+}
+
+@Composable
+private fun Ts18DashboardHeader(
+	state: BTDevicesScreenState,
+	isScanning: Boolean,
+	modifier: Modifier = Modifier,
+) {
+	val hidStatus = state.capabilities.firstOrNull { it.feature == PeripheralFeature.HID_HOST }?.status
+	val oppStatus = state.capabilities.firstOrNull { it.feature == PeripheralFeature.OPP_SHARE }?.status
+	val protectedCount = state.inventoryDevices.count { it.isProtected }
+
+	ElevatedCard(modifier = modifier) {
+		Column(
+			verticalArrangement = Arrangement.spacedBy(8.dp),
+			modifier = Modifier.padding(12.dp)
+		) {
+			Text(
+				text = stringResource(R.string.ts18_dashboard_title),
+				style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+			)
+			Row(
+				horizontalArrangement = Arrangement.spacedBy(8.dp),
+				modifier = Modifier.fillMaxWidth()
+			) {
+				DashboardButton(
+					label = stringResource(R.string.ts18_dashboard_phone_auto),
+					detail = stringResource(R.string.ts18_dashboard_vendor_owned),
+					modifier = Modifier.weight(1f)
+				)
+				DashboardButton(
+					label = stringResource(R.string.ts18_dashboard_peripherals),
+					detail = stringResource(
+						R.string.ts18_dashboard_inventory_count,
+						state.inventoryDevices.size,
+						protectedCount
+					),
+					modifier = Modifier.weight(1f)
+				)
+				DashboardButton(
+					label = stringResource(R.string.ts18_dashboard_file_share),
+					detail = oppStatus.toDashboardText(),
+					modifier = Modifier.weight(1f)
+				)
+				DashboardButton(
+					label = stringResource(R.string.ts18_dashboard_supervision),
+					detail = if (isScanning) stringResource(R.string.ts18_dashboard_scanning)
+					else hidStatus.toDashboardText(),
+					modifier = Modifier.weight(1f)
+				)
+			}
+		}
+	}
+}
+
+@Composable
+private fun DashboardButton(
+	label: String,
+	detail: String,
+	modifier: Modifier = Modifier,
+) {
+	FilledTonalButton(
+		onClick = {},
+		modifier = modifier,
+	) {
+		Column {
+			Text(text = label)
+			Text(
+				text = detail,
+				style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
 			)
 		}
 	}
+}
+
+@Composable
+private fun CapabilityStatus?.toDashboardText(): String = when (this) {
+	CapabilityStatus.AVAILABLE -> stringResource(R.string.ts18_dashboard_available)
+	CapabilityStatus.REQUIRES_PRIVILEGE -> stringResource(R.string.ts18_dashboard_requires_privilege)
+	CapabilityStatus.REQUIRES_ROOT -> stringResource(R.string.ts18_dashboard_requires_root)
+	CapabilityStatus.REQUIRES_DEVICE_VALIDATION -> stringResource(R.string.ts18_dashboard_requires_validation)
+	CapabilityStatus.FAILED -> stringResource(R.string.ts18_dashboard_failed)
+	CapabilityStatus.UNAVAILABLE,
+	null -> stringResource(R.string.ts18_dashboard_unavailable)
 }
 
 private class BTDeviceClassicalScreenStateParams :

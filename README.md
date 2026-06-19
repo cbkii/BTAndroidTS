@@ -58,6 +58,9 @@ BTAndroidTS must not:
 - start unbounded scans, root commands, or Bluetooth restarts.
 
 See [docs/SAFETY_AND_ROLLBACK.md](docs/SAFETY_AND_ROLLBACK.md) for rollback and STOP conditions.
+See [docs/INSTALLATION_OPERATION_ROLLBACK.md](docs/INSTALLATION_OPERATION_ROLLBACK.md) for
+installation and operation guidance, and [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)
+for current task completeness.
 
 ## Building
 

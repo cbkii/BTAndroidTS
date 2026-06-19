@@ -36,6 +36,9 @@ jobs:
       - name: Lint
         run: ./gradlew lintStandardDebug --stacktrace
 
+      - name: Manifest permission checks
+        run: sh scripts/check-manifest-permissions.sh
+
       - name: Assemble standard debug
         run: ./gradlew assembleStandardDebug --stacktrace
 
@@ -49,9 +52,4 @@ jobs:
         run: ./gradlew assembleTs18PrivilegedRelease --stacktrace
 
       - name: Validate Magisk package when present
-        run: |
-          if [ -x ./scripts/validate-magisk-package.sh ]; then
-            ./scripts/validate-magisk-package.sh
-          else
-            echo "Magisk package validator not present yet"
-          fi
+        run: sh scripts/validate-magisk-package.sh
