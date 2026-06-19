@@ -7,12 +7,13 @@ import com.cbkii.btandroidts.domain.bluetooth.BluetoothClientConnector
 import com.cbkii.btandroidts.domain.bluetooth.BluetoothScanner
 import com.cbkii.btandroidts.domain.bluetooth.BluetoothServerConnector
 import org.koin.core.module.dsl.factoryOf
+import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
 val bluetoothClassicModule = module {
 
-	factoryOf(::AndroidBluetoothScanner) bind BluetoothScanner::class
+	singleOf(::AndroidBluetoothScanner) bind BluetoothScanner::class
 
 	factoryOf(::AndroidBTClientConnector) bind BluetoothClientConnector::class
 

@@ -23,6 +23,9 @@ import com.cbkii.btandroidts.domain.bluetooth.models.BluetoothMessage
 import com.cbkii.btandroidts.domain.exceptions.BluetoothConnectException
 import com.cbkii.btandroidts.domain.exceptions.BluetoothPermissionNotProvided
 import com.cbkii.btandroidts.domain.exceptions.InvalidBluetoothAddressException
+import com.cbkii.btandroidts.domain.peripheral.BluetoothAddress
+import com.cbkii.btandroidts.domain.peripheral.BluetoothBondController
+import com.cbkii.btandroidts.domain.peripheral.BondingResult
 import com.cbkii.btandroidts.domain.settings.repository.BTSettingsDataSore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +50,7 @@ private const val CLIENT_LOGGER = "CLIENT_LOGGER"
 class AndroidBTClientConnector(
 	private val context: Context,
 	private val btSettings: BTSettingsDataSore,
+	private val bondController: BluetoothBondController,
 ) : BluetoothClientConnector {
 
 	private val _bTManager by lazy { context.getSystemService<BluetoothManager>() }
@@ -87,9 +91,25 @@ class AndroidBTClientConnector(
 		_remoteDevice.update { device.toDomainModel() }
 
 		if (secure && device.bondState == BluetoothDevice.BOND_NONE) {
-			// if the device is not bonded with the device
 			Log.d(CLIENT_LOGGER, "BONDING DEVICE")
-			device.createBond()
+			val bondAddress = BluetoothAddress.parse(address)
+				?: return Result.failure(InvalidBluetoothAddressException())
+			when (val bondResult = bondController.createBond(bondAddress)) {
+				BondingResult.AlreadyBonded,
+				BondingResult.Bonded -> Unit
+				is BondingResult.Failed -> return Result.failure(
+					BluetoothConnectException(
+						errorCode = -1,
+						mError = "Bonding failed: ${bondResult.reason} ${bondResult.detail.orEmpty()}"
+					)
+				)
+				BondingResult.Removed -> return Result.failure(
+					BluetoothConnectException(
+						errorCode = -1,
+						mError = "Bonding removed while connecting"
+					)
+				)
+			}
 		}
 
 		return withContext(Dispatchers.IO) {

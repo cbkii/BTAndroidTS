@@ -16,7 +16,7 @@ val bluetoothLEModule = module {
 
 	singleOf(::SampleUUIDReader)
 
-	factoryOf(::AndroidBluetoothLEScanner).bind<BluetoothLEScanner>()
+	singleOf(::AndroidBluetoothLEScanner).bind<BluetoothLEScanner>()
 	factoryOf(::AndroidBLEClientConnector).bind<BluetoothLEClientConnector>()
 	factoryOf(::AndroidBLEServerConnector).bind<BLEServerConnector>()
 }

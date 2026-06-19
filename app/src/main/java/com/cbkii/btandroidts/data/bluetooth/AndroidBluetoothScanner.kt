@@ -73,6 +73,9 @@ class AndroidBluetoothScanner(
 	private val _scannedAddresses: List<String>
 		get() = _availableDevices.value.map(BluetoothDeviceModel::address)
 
+	private var isScanReceiverRegistered = false
+	private var isBondReceiverRegistered = false
+
 
 	private val _scanReceiver = ScanResultsReceiver { device ->
 		// if the device address is already in bonded list skip
@@ -163,12 +166,7 @@ class AndroidBluetoothScanner(
 		val pairedDevices = _bluetoothAdapter?.bondedDevices
 			?.map(BluetoothDevice::toDomainModel) ?: emptyList()
 
-		ContextCompat.registerReceiver(
-			context,
-			_bondDeviceUpdatedReceiver,
-			IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED),
-			ContextCompat.RECEIVER_EXPORTED
-		)
+		registerBondReceiver()
 
 		_bondedDevices.update { pairedDevices }
 		return Result.success(Unit)
@@ -179,13 +177,7 @@ class AndroidBluetoothScanner(
 		if (!hasBTPermissions) return Result.failure(BluetoothPermissionNotProvided())
 		// checks only for android 11 and lower otherwise its always false
 		if (!_hasLocationPermission) return Result.failure(LocationPermissionNotProvided())
-		// register BroadCastReceiver to receive bluetooth devices
-		ContextCompat.registerReceiver(
-			context,
-			_scanReceiver,
-			IntentFilter(BluetoothDevice.ACTION_FOUND),
-			ContextCompat.RECEIVER_EXPORTED
-		)
+		registerScanReceiver()
 		// start discovery for bluetooth devices
 		// it will listen for 12 seconds
 		Log.d(BLUETOOTH_SCANNER, "SCAN INITIATED")
@@ -200,18 +192,57 @@ class AndroidBluetoothScanner(
 		// stop discovery
 		Log.d(BLUETOOTH_SCANNER, "SCAN CANCELED")
 		val status = _bluetoothAdapter?.cancelDiscovery() ?: false
+		unregisterScanReceiver()
 		return Result.success(status)
 	}
 
 
 	override fun releaseResources() {
+		unregisterScanReceiver()
+		unregisterBondReceiver()
+	}
+
+	private fun registerScanReceiver() {
+		if (isScanReceiverRegistered) return
+		ContextCompat.registerReceiver(
+			context,
+			_scanReceiver,
+			IntentFilter(BluetoothDevice.ACTION_FOUND),
+			ContextCompat.RECEIVER_EXPORTED
+		)
+		isScanReceiverRegistered = true
+	}
+
+	private fun registerBondReceiver() {
+		if (isBondReceiverRegistered) return
+		ContextCompat.registerReceiver(
+			context,
+			_bondDeviceUpdatedReceiver,
+			IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED),
+			ContextCompat.RECEIVER_EXPORTED
+		)
+		isBondReceiverRegistered = true
+	}
+
+	private fun unregisterScanReceiver() {
+		if (!isScanReceiverRegistered) return
 		try {
-			// remove the broadcast receiver for find device
 			context.unregisterReceiver(_scanReceiver)
-			// remove broadcast from newly bounded devices
+		} catch (e: Exception) {
+			Log.e(BLUETOOTH_SCANNER, "SCAN RECEIVER ALREADY REMOVED", e)
+		} finally {
+			isScanReceiverRegistered = false
+		}
+	}
+
+	private fun unregisterBondReceiver() {
+		if (!isBondReceiverRegistered) return
+		try {
 			context.unregisterReceiver(_bondDeviceUpdatedReceiver)
 		} catch (e: Exception) {
-			Log.e(BLUETOOTH_SCANNER, "RECEIVER ALREADY REMOVED", e)
+			Log.e(BLUETOOTH_SCANNER, "BOND RECEIVER ALREADY REMOVED", e)
+		} finally {
+			isBondReceiverRegistered = false
 		}
 	}
 
