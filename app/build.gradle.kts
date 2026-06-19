@@ -10,19 +10,29 @@ plugins {
 }
 
 android {
-	namespace = "com.eva.bluetoothterminalapp"
+	namespace = "com.cbkii.btandroidts"
 	compileSdk = libs.versions.android.compilesdk.get().toInt()
 
 	defaultConfig {
-		applicationId = "com.eva.bluetoothterminalapp"
+		applicationId = "com.cbkii.btandroidts"
 		minSdk = libs.versions.android.minsdk.get().toInt()
 		targetSdk = libs.versions.android.targetsdk.get().toInt()
-		versionCode = 6
-		versionName = "1.2.2"
+		versionCode = 180001
+		versionName = "18.0.0-alpha01"
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 		vectorDrawables {
 			useSupportLibrary = true
+		}
+	}
+
+	flavorDimensions += "distribution"
+	productFlavors {
+		create("standard") {
+			dimension = "distribution"
+		}
+		create("ts18Privileged") {
+			dimension = "distribution"
 		}
 	}
 
@@ -77,6 +87,7 @@ android {
 	}
 	buildFeatures {
 		compose = true
+		buildConfig = true
 	}
 	packaging {
 		resources {

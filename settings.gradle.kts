@@ -19,5 +19,5 @@ dependencyResolutionManagement {
 	}
 }
 
-rootProject.name = "BlueToothTerminalApp"
+rootProject.name = "BTAndroidTS"
 include(":app")

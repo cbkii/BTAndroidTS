@@ -15,3 +15,4 @@
 local.properties
 keystore.properties
 /.junie
+*/TS18diagnostics/*

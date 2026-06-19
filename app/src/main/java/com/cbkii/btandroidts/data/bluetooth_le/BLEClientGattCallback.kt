@@ -1,0 +1,335 @@
+package com.cbkii.btandroidts.data.bluetooth_le
+
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothGattService
+import android.bluetooth.BluetoothProfile
+import android.os.Build
+import android.util.Log
+import com.cbkii.btandroidts.data.mapper.toDomainModelWithName
+import com.cbkii.btandroidts.data.mapper.toDomainModelWithNames
+import com.cbkii.btandroidts.data.samples.SampleUUIDReader
+import com.cbkii.btandroidts.domain.bluetooth_le.enums.BLEConnectionState
+import com.cbkii.btandroidts.domain.bluetooth_le.enums.BLEPhysicalChannels
+import com.cbkii.btandroidts.domain.bluetooth_le.models.BLECharacteristicsModel
+import com.cbkii.btandroidts.domain.bluetooth_le.models.BLEConnectionEvents
+import com.cbkii.btandroidts.domain.bluetooth_le.models.BLEDescriptorModel
+import com.cbkii.btandroidts.domain.bluetooth_le.models.BLEServiceModel
+import kotlinx.collections.immutable.toPersistentList
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+private const val GATT_LOGGER = "BLE_GATT_CALLBACK"
+
+@SuppressLint("MissingPermission")
+class BLEClientGattCallback(
+	private val reader: SampleUUIDReader,
+	private val echoWrite: Boolean = true,
+	private val scope: CoroutineScope = CoroutineScope(SupervisorJob())
+) : BluetoothGattCallback() {
+
+	private val _connectionState = MutableStateFlow(BLEConnectionState.CONNECTING)
+	val connectionState = _connectionState.asStateFlow()
+
+	private val _bleGattServices = MutableStateFlow<List<BluetoothGattService>>(emptyList())
+	val bleGattServices = _bleGattServices
+		.map { services -> services.toDomainModelWithNames(reader = reader) }
+
+	private val bleGattServicesValue: List<BluetoothGattService>
+		get() = _bleGattServices.value
+
+	private val _readCharacteristic = MutableStateFlow<BLECharacteristicsModel?>(null)
+	val readCharacteristics = _readCharacteristic.asStateFlow()
+
+	private val _events = MutableSharedFlow<BLEConnectionEvents>(
+		replay = 1,
+		onBufferOverflow = BufferOverflow.DROP_OLDEST
+	)
+	val connEvents = _events.asSharedFlow()
+
+	override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
+		if (status != BluetoothGatt.GATT_SUCCESS) {
+			_connectionState.update { BLEConnectionState.FAILED }
+			Log.e(GATT_LOGGER, "PROBLEM WITH CONNECTION STATUS CODE: $status")
+			Log.d(GATT_LOGGER, "CLOSING CONNECTION")
+			gatt?.close()
+			return
+		}
+
+		val newConnectionState = when (newState) {
+			BluetoothProfile.STATE_CONNECTED -> BLEConnectionState.CONNECTED
+			BluetoothProfile.STATE_DISCONNECTED -> BLEConnectionState.DISCONNECTED
+			BluetoothProfile.STATE_CONNECTING -> BLEConnectionState.CONNECTING
+			BluetoothProfile.STATE_DISCONNECTING -> BLEConnectionState.DISCONNECTING
+			else -> null
+		}
+
+		Log.d(GATT_LOGGER, "NEW CONNECTION STATE :$newConnectionState")
+
+		_connectionState.update { newConnectionState ?: BLEConnectionState.FAILED }
+
+		if (newConnectionState != BLEConnectionState.CONNECTED) return
+
+		// signal strength this can change
+		gatt?.readRemoteRssi()
+
+		//discover services
+		gatt?.discoverServices()
+	}
+
+	override fun onReadRemoteRssi(gatt: BluetoothGatt?, rssi: Int, status: Int) {
+
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		Log.d(GATT_LOGGER, "READING RSSI SUCCESSFUL")
+		// update rssi value
+		_events.tryEmit(BLEConnectionEvents.OnRSSIUpdated(rssi))
+	}
+
+	override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		Log.d(GATT_LOGGER, "UPDATING MTU SUCCESSFUL :$mtu")
+		_events.tryEmit(BLEConnectionEvents.OnMTUUpdated(mtu))
+	}
+
+	override fun onPhyRead(gatt: BluetoothGatt?, txPhy: Int, rxPhy: Int, status: Int) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		Log.d(GATT_LOGGER, "PHY READ TX:$txPhy RX:$rxPhy")
+	}
+
+	override fun onPhyUpdate(gatt: BluetoothGatt?, txPhy: Int, rxPhy: Int, status: Int) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		val txChannel = txPhy.toBLPhy()
+		val rxChannel = rxPhy.toBLPhy()
+		Log.d(GATT_LOGGER, "PHY READ UPDATED TX:$txChannel RX:$rxChannel")
+		_events.tryEmit(BLEConnectionEvents.OnPhyUpdated(txChannel, rxChannel))
+	}
+
+	override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
+
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		Log.d(GATT_LOGGER, "SERVICES DISCOVERED")
+
+		val services = gatt?.services ?: emptyList()
+
+		_bleGattServices.update { prev ->
+			(prev + services).distinctBy(BluetoothGattService::getUuid)
+		}
+	}
+
+	override fun onServiceChanged(gatt: BluetoothGatt) {
+		// re-discover services
+		Log.d(GATT_LOGGER, "SERVICES CHANGED RE-DISCOVERING SERVICES")
+		gatt.discoverServices()
+	}
+
+	@Deprecated("Deprecated in Java")
+	@Suppress("DEPRECATION")
+	override fun onCharacteristicRead(
+		gatt: BluetoothGatt?,
+		characteristic: BluetoothGattCharacteristic?,
+		status: Int
+	) {
+		if (gatt == null || characteristic?.value == null) return
+		// only use this under API 32
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
+		onCharacteristicRead(gatt, characteristic, characteristic.value, status)
+	}
+
+	override fun onCharacteristicRead(
+		gatt: BluetoothGatt,
+		characteristic: BluetoothGattCharacteristic,
+		value: ByteArray,
+		status: Int
+	) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+
+		Log.d(GATT_LOGGER, "READ CHARACTERISTICS :${characteristic.uuid}")
+		scope.launch {
+			try {
+				// decode the received value and decide it
+				val domainModel = characteristic.toDomainModelWithNames(reader)
+					.copy(byteArray = value)
+
+				_readCharacteristic.update { prev ->
+					if (prev?.uuid == domainModel.uuid) prev.copy(byteArray = value)
+					else domainModel
+				}
+
+				Log.d(GATT_LOGGER, "VALUE ON READ ${domainModel.byteArray}")
+			} catch (e: Exception) {
+				if (e is CancellationException) throw e
+				e.printStackTrace()
+				Log.e(GATT_LOGGER, "EXCEPTION", e)
+			}
+		}
+	}
+
+	override fun onCharacteristicWrite(
+		gatt: BluetoothGatt?,
+		characteristic: BluetoothGattCharacteristic?,
+		status: Int
+	) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		Log.d(GATT_LOGGER, "WRITTEN SUCCESSFULLY")
+		if (characteristic == null || !echoWrite) return
+		val isSuccess = gatt?.readCharacteristic(characteristic) ?: false
+		Log.d(GATT_LOGGER, "UPDATING THE CHARACTERISTIC VALUE $isSuccess")
+	}
+
+	@Deprecated("Deprecated in Java")
+	@Suppress("DEPRECATION")
+	override fun onDescriptorRead(
+		gatt: BluetoothGatt?,
+		descriptor: BluetoothGattDescriptor?,
+		status: Int
+	) {
+		if (gatt == null || descriptor?.value == null) return
+		// only use this under API 32
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
+		onDescriptorRead(gatt, descriptor, status, descriptor.value)
+	}
+
+	override fun onDescriptorRead(
+		gatt: BluetoothGatt,
+		descriptor: BluetoothGattDescriptor,
+		status: Int,
+		value: ByteArray
+	) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+
+		Log.d(
+			GATT_LOGGER,
+			"READING DESCRIPTOR :${descriptor.uuid} CHARACTERISTICS :${descriptor.characteristic.uuid}"
+		)
+
+		scope.launch {
+			try {
+				val characteristic = _readCharacteristic.value
+				if (characteristic == null || descriptor.characteristic.uuid != characteristic.uuid)
+					return@launch
+
+				// decode the received value and decide it
+				val domainModel = descriptor.toDomainModelWithName(reader)
+					.copy(byteArray = value)
+
+				val descriptors = characteristic.descriptors.map { desc ->
+					if (desc.uuid == domainModel.uuid) domainModel
+					else desc
+				}
+				// make sure characteristic is already read
+				_readCharacteristic.update { characteristic ->
+					characteristic?.copy(descriptors = descriptors.toPersistentList())
+				}
+				// update the read value
+				Log.d(GATT_LOGGER, "VALUE ON DESC READ ${domainModel.valueHexString}")
+			} catch (e: Exception) {
+				Log.e(GATT_LOGGER, "EXCEPTION", e)
+				e.printStackTrace()
+			}
+		}
+	}
+
+	override fun onDescriptorWrite(
+		gatt: BluetoothGatt?,
+		descriptor: BluetoothGattDescriptor?,
+		status: Int
+	) {
+		if (status != BluetoothGatt.GATT_SUCCESS) return
+		Log.d(GATT_LOGGER, "WRITTEN VALUE ")
+		// re-validating the current value
+		if (descriptor == null || !echoWrite) return
+		val isSuccess = gatt?.readDescriptor(descriptor) ?: false
+		Log.d(GATT_LOGGER, "UPDATED DESCRIPTOR VALUE $isSuccess")
+	}
+
+	@Deprecated("Deprecated in Java")
+	@Suppress("DEPRECATION")
+	override fun onCharacteristicChanged(
+		gatt: BluetoothGatt?,
+		characteristic: BluetoothGattCharacteristic?
+	) {
+		if (gatt == null || characteristic == null) return
+		// only use this under API 32
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return
+		onCharacteristicChanged(gatt, characteristic, characteristic.value)
+	}
+
+	override fun onCharacteristicChanged(
+		gatt: BluetoothGatt,
+		characteristic: BluetoothGattCharacteristic,
+		value: ByteArray
+	) {
+		scope.launch {
+			try {
+				// for the first time read char will be null
+				if (_readCharacteristic.value == null) {
+
+					val domainModel = characteristic.toDomainModelWithNames(reader)
+						.copy(byteArray = value)
+					// update the model
+					_readCharacteristic.update { domainModel }
+					// read the get descriptor then
+					val configDescriptor = characteristic
+						.getDescriptor(BLEClientUUID.CCC_DESCRIPTOR_UUID)
+
+					gatt.readDescriptor(configDescriptor)
+					// set the read value once
+				}
+
+				// then only update the values
+				_readCharacteristic.update { prev ->
+					if (prev == null) return@update prev
+					prev.copy(byteArray = value)
+				}
+
+				Log.d(GATT_LOGGER, "VALUE ON CHANGE CHARACTERISTICS ${value.decodeToString()}")
+			} catch (e: Exception) {
+				Log.e(GATT_LOGGER, "EXCEPTION", e)
+				e.printStackTrace()
+			}
+		}
+	}
+
+
+	fun findCharacteristicFromDomainModel(
+		service: BLEServiceModel,
+		characteristic: BLECharacteristicsModel
+	): BluetoothGattCharacteristic? {
+		return bleGattServicesValue
+			.find { it.uuid == service.serviceUUID }
+			?.getCharacteristic(characteristic.uuid)
+	}
+
+	fun findDescriptorFromDomainModel(
+		service: BLEServiceModel,
+		characteristic: BLECharacteristicsModel,
+		descriptor: BLEDescriptorModel,
+	): BluetoothGattDescriptor? {
+
+		return bleGattServicesValue
+			.find { it.uuid == service.serviceUUID }
+			?.getCharacteristic(characteristic.uuid)
+			?.getDescriptor(descriptor.uuid)
+	}
+
+
+	private fun Int.toBLPhy() = when (this) {
+		BluetoothDevice.PHY_LE_CODED -> BLEPhysicalChannels.LE_CODED
+		BluetoothDevice.PHY_LE_1M -> BLEPhysicalChannels.LE_1M
+		BluetoothDevice.PHY_LE_2M -> BLEPhysicalChannels.LE_2M
+		else -> throw IllegalArgumentException("Invalid transmission value")
+	}
+}

@@ -1,0 +1,9 @@
+package com.cbkii.btandroidts.domain.bluetooth_le.enums
+
+enum class BLEConnectionState {
+	CONNECTING,
+	CONNECTED,
+	DISCONNECTING,
+	DISCONNECTED,
+	FAILED,
+}

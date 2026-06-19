@@ -1,5 +1,5 @@
 <resources>
-  <string name="app_name">BlueToothTerminalApp</string>
+  <string name="app_name">BTAndroidTS</string>
   <string name="enable_bluetooth_button_text">Enable Bluetooth</string>
   <string name="allow_location_button_text">Allow</string>
   <string name="bluetooth_permission_not_found_title">Bluetooth Permission Not granted</string>

@@ -1,93 +1,79 @@
-# :large_blue_circle: Bluetooth Terminal App
+# BTAndroidTS
 
-This Bluetooth Android Terminal App facilitates interaction with Bluetooth and Bluetooth Low
-Energy (BLE) devices.The app provides a user-friendly interface to manage connections, interactwith
-devices.
+BTAndroidTS is a TS18-focused Android Bluetooth peripheral manager derived from the original MIT
+licensed Bluetooth terminal application. The project keeps the useful Classic RFCOMM terminal and
+BLE GATT inspection tools, but the product direction is now a persistent, safe peripheral manager
+for rooted Topway TS18 head units.
 
-## :information_desk_person: Description
+The app is intended to manage the Android/Unisoc Bluetooth lane while leaving the separate Topway
+automotive Bluetooth lane in place for phone calls, media, contacts, and projection.
 
-The Bluetooth Android Terminal App supports both classic Bluetooth and Bluetooth Low Energy (BLE)
-connections. It allows users to scan for available devices, establish connections, and communicate
-with connected devices.
-Additionally, the app includes a built-in server functionality for simple interactions between two
-peers running the same app
+## Target Runtime
 
-## :performing_arts: Features
+- Android 10 runtime, API 29 minimum.
+- Primary exact-device target: UIS8581A / SP9863A TS18 family, model `s9863a1h10_Natv`.
+- Rooted deployments should use reversible Magisk modules, not direct system or vendor partition
+  modification.
+- `com.android.bluetooth` remains the Android Bluetooth stack authority.
+- `com.tw.bt` and Topway services remain the automotive phone/projection authority.
 
-### Classic Bluetooth
+See [docs/TS18_DEVICE_CONTEXT.md](docs/TS18_DEVICE_CONTEXT.md) and
+[docs/BLUETOOTH_LANE_MODEL.md](docs/BLUETOOTH_LANE_MODEL.md) for evidence classification and
+the tandem-lane model.
 
-- **Devices:** Display a list of paired devices and available unpaired devices.
-- **Connect and Interact:** Allow the user to communicate with the connected device
-- **Chat Server:** Start a server within the app to connect to other phones and interact with
-  messages.
-- **Settings:** You can check customize the connection terminal for clients and server.
+## Build Variants
 
-### Bluetooth Low Energy (BLE)
+The project exposes two distribution flavours:
 
-- **Scan for Devices:** Scan for devices supporting bluetooth low energy
-- **Services and Charateristics:** Display available services and characteristics for the connected
-  device. Allow users to read ,write or observe values to the characteristics .
-- **Server** A BLE Server with battery and enviromental sensing (illuminanace) and various services
-- **Settings:** You can customize scan settings for the app to discover your device.
+- `standard`: normal APK install, no privileged Bluetooth permission.
+- `ts18Privileged`: privileged APK variant intended for systemless Magisk placement. This flavour
+  may request `android.permission.BLUETOOTH_PRIVILEGED` and must remain narrowly scoped.
 
-## :camera_flash: Screenshots
+Both release variants keep package identity `com.cbkii.btandroidts`; debug builds add the existing
+debug suffix. This allows the privileged build to use a matching Android priv-app allowlist without
+changing the application data identity.
 
-These are some of the screens shots showing the working of classic bluetooth connection
+## Current Capabilities
 
-<p align="center">
-   <img src="screenshots/bt_classic_scan.png" width="20%" />
-   <img src="screenshots/bt_peer_features.png" width="20%"/>
-   <img src="screenshots/bt_client_talking.png" width="20%"/>  
-   <img src="screenshots/bt_classic_settings.png" width="20%"/>
-</p>
+- Classic Bluetooth discovery and RFCOMM terminal tooling inherited from the upstream app.
+- BLE discovery and GATT inspection inherited from the upstream app.
+- BLE server tools retained as advanced diagnostics.
+- TS18 documentation, safety boundaries, validation matrix, and build-flavour baseline added for
+  the peripheral-manager transformation.
 
-This screenshots shows the working of a bluetooth low energy device connection
+The project is in active transformation. Device-level HID Host, OPP, supervisor, diagnostics, and
+Magisk packaging work is tracked in the validation matrix and must not be reported as TS18-passed
+until captured on real hardware.
 
-<p align="center">
-   <img src="screenshots/ble_devices_scanning.png" width="20%" />
-   <img src="screenshots/ble_device_profile.png" width="20%"/>
-   <img src="screenshots/ble_notify_running.png" width="20%"/>  
-   <img src="screenshots/ble_settings.png" width="20%">
-</p>
+## Safety Boundaries
 
-## :building_construction: Getting Started
+BTAndroidTS must not:
 
-Make sure the device supports **Bluetooth** and if possible **Bluetooth Low Energy** to check out
-its functionalities
+- replace `Bluetooth.apk`;
+- replace Bluetooth HAL libraries or WCN/controller firmware;
+- edit `/data/misc/bluedroid` directly;
+- clear all bonds;
+- disable Topway services;
+- claim UID 1000, platform signing, or `android.permission.BLUETOOTH_STACK`;
+- start unbounded scans, root commands, or Bluetooth restarts.
 
-1. **Clone the Repository:**
+See [docs/SAFETY_AND_ROLLBACK.md](docs/SAFETY_AND_ROLLBACK.md) for rollback and STOP conditions.
 
-   ```bash
-   git clone https://github.com/tuuhin/BTAndroidApp.git
-   ```
+## Building
 
-2. **Open Project**
-   Open the project in android studio
+```bash
+./gradlew testStandardDebugUnitTest
+./gradlew lintStandardDebug
+./gradlew assembleStandardDebug
+./gradlew assembleStandardRelease
+./gradlew assembleTs18PrivilegedDebug
+./gradlew assembleTs18PrivilegedRelease
+```
 
-3. **Build and Run**
-   Build and run on android device with API _29_ (Android 10) and above
+Release builds run R8. Reflection-dependent Bluetooth code must use narrow keep rules only.
 
-### :curly_loop: Feedback and Support
+## Upstream Attribution
 
-If you encounter any problems or bugs in the app, please raise
-an [issue](https://github.com/tuuhin/BTAndroidApp/issues/new)
-
-### :man_cook: Contributing
-
-We welcome contributions to the `BTAndroidApp` project! Please take a moment to review
-our [Contribution Guidelines](CONTRIBUTING.md) before submitting pull requests or issues.
-
-## :end: Conclusiion
-
-The Bluetooth Android Terminal App is a versatile tool for interacting with Bluetooth and BLE
-devices. While the app aims to provide a seamless experience and was created to debug esp32 based
-microcontroller which have bluetooth features.
-These seems complete for now , but if someone encounter any issues or bugs please raise
-an [issue](https://github.com/tuuhin/BTAndroidApp/issues/new)
-
-### :revolving_hearts: Special Thanks
-
-Special thanks two most used open sourced bluetooth terminal apps.
-
-- [Nordic Semiconductor android app](https://github.com/NordicSemiconductor/Android-nRF-Connect)
-- [Simple Bluetooth termial](https://github.com/kai-morich/SimpleBluetoothTerminal)
+This repository is derived from the original Bluetooth terminal application by Tuuhin. The original
+MIT licence is preserved in [LICENSE](LICENSE). Useful upstream debugging features are retained
+under Advanced Tools rather than removed.
