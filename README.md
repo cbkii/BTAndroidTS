@@ -84,6 +84,42 @@ Before installing the module:
 Connection labels are intentionally explicit: RFCOMM terminal, BLE GATT, HID Host, ACL, and OPP are
 different actions.
 
+### Classic Bluetooth
+
+- **Devices:** Display a list of paired devices and available unpaired devices.
+- **Connect and Interact:** Allow the user to communicate with the connected device
+- **Chat Server:** Start a server within the app to connect to other phones and interact with
+  messages.
+- **Settings:** You can check customize the connection terminal for clients and server.
+
+### Bluetooth Low Energy (BLE)
+
+- **Scan for Devices:** Scan for devices supporting bluetooth low energy
+- **Services and Charateristics:** Display available services and characteristics for the connected
+  device. Allow users to read ,write or observe values to the characteristics .
+- **Server** A BLE Server with battery and enviromental sensing (illuminanace) and various services
+- **Settings:** You can customize scan settings for the app to discover your device.
+
+## Screenshots
+
+These are some of the screens shots showing the working of classic bluetooth connection
+
+<p align="center">
+   <img src="screenshots/bt_classic_scan.png" width="22%" />
+   <img src="screenshots/bt_peer_features.png" width="22%"/>
+   <img src="screenshots/bt_client_talking.png" width="22%"/>  
+   <img src="screenshots/bt_classic_settings.png" width="22%"/>
+</p>
+
+This screenshots shows the working of a bluetooth low energy device connection
+
+<p align="center">
+   <img src="screenshots/ble_devices_scanning.png" width="22%" />
+   <img src="screenshots/ble_device_profile.png" width="22%"/>
+   <img src="screenshots/ble_notify_running.png" width="22%"/>  
+   <img src="screenshots/ble_settings.png" width="22%">
+</p>
+
 ## Safety Rules
 
 BTAndroidTS must not:
@@ -106,3 +142,9 @@ Developer, reviewer, and AI-agent guidance lives outside this end-user README:
 - [docs/BLUETOOTH_LANE_MODEL.md](docs/BLUETOOTH_LANE_MODEL.md)
 - [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md)
 - [docs/INSTALLATION_OPERATION_ROLLBACK.md](docs/INSTALLATION_OPERATION_ROLLBACK.md)
+
+### :revolving_hearts: Special Thanks
+
+Special thanks to [upstream/original Author](https://github.com/tuuhin/BTAndroidApp/issues/new)    ヾ(＠⌒ー⌒＠)ノ
+
+If you encounter any problems or bugs in the app, please raise an [issue](https://github.com/cbkii/BTAndroidTS/issues/new)
