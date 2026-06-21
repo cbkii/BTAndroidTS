@@ -72,8 +72,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
+        with:
+          packages: "platform-tools build-tools;${{ env.ANDROID_BUILD_TOOLS }} platforms;android-${{ env.ANDROID_COMPILE_SDK }}"
 
-      - name: Install required Android SDK components
+      - name: Configure local.properties
         shell: bash
         run: |
           set -euo pipefail
@@ -82,10 +84,6 @@ jobs:
             echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
             exit 1
           fi
-          sdkmanager --install \
-            'platform-tools' \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "platforms;android-${ANDROID_COMPILE_SDK}"
           printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
           echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
 
@@ -138,13 +136,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t apk_candidates < <(find app/build/outputs/apk/ts18Privileged/debug -maxdepth 1 -type f -name '*.apk' | sort)
-          if (( ${#apk_candidates[@]} != 1 )); then
-            echo "::error::Expected exactly one TS18 privileged debug APK; found ${#apk_candidates[@]}."
-            printf 'Candidate: %s\n' "${apk_candidates[@]}"
+          # Find the debug APK for the ts18Privileged flavor
+          # Path: app/build/outputs/apk/ts18Privileged/debug/app-ts18Privileged-debug.apk
+          mapfile -t apk_candidates < <(find app/build/outputs/apk/ts18Privileged/debug -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | sort)
+          if (( ${#apk_candidates[@]} == 0 )); then
+            echo "::error::No TS18 privileged debug APK found."
             exit 1
           fi
-          sh scripts/package-magisk.sh "${apk_candidates[0]}"
+          # Use the latest built APK
+          sh scripts/package-magisk.sh "${apk_candidates[-1]}"
 
       - name: Validate Magisk package
         run: sh scripts/validate-magisk-package.sh
@@ -188,6 +188,7 @@ jobs:
         if: always()
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           JOB_STATUS: ${{ job.status }}
           BUILD_REPORTS_ARTIFACT_URL: ${{ steps.build_reports_artifact.outputs.artifact-url }}
           DEBUG_APKS_ARTIFACT_URL: ${{ steps.debug_apks_artifact.outputs.artifact-url }}
@@ -204,6 +205,22 @@ jobs:
             *) result_message="⚠️ BTAndroidTS Android PR build finished with status: ${JOB_STATUS}." ;;
           esac
 
+          write_findings() {
+            local jobs_json
+            jobs_json="$(mktemp)"
+            if gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" > "${jobs_json}" 2>/dev/null; then
+              jq -r '
+                .jobs[]? as $job
+                | $job.steps[]?
+                | select((.conclusion // "") | IN("failure", "cancelled", "timed_out", "action_required"))
+                | "- **Step " + (.conclusion // "unknown") + "** — " + $job.name + " / " + .name
+              ' "${jobs_json}" | awk 'NF && !seen[$0]++'
+            else
+              echo "- Workflow job details could not be queried."
+            fi
+            rm -f "${jobs_json}"
+          }
+
           {
             echo "# BTAndroidTS Android PR build"
             echo
@@ -215,6 +232,10 @@ jobs:
             echo "- Ref: \`${GITHUB_REF}\`"
             echo "- Commit: [\`${GITHUB_SHA}\`](${repo_url}/commit/${GITHUB_SHA})"
             echo "- Workflow run: [${GITHUB_RUN_ID}](${run_url})"
+            echo
+            echo "## Unique warnings/errors/failures"
+            echo
+            write_findings
             echo
             echo "## Checks run"
             echo
