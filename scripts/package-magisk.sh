@@ -16,7 +16,7 @@ AAPT_BIN="aapt"
 if ! command -v "$AAPT_BIN" >/dev/null 2>&1; then
   # Try to find it in ANDROID_HOME or ANDROID_SDK_ROOT
   SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
-  AAPT_BIN="$(find "$SDK_ROOT/build-tools" -name aapt -type f 2>/dev/null | sort -V | tail -n 1 || true)"
+  AAPT_BIN="$(find "$SDK_ROOT/build-tools" -name aapt -type f 2>/dev/null | sort | tail -n 1 || true)"
   if [ -z "$AAPT_BIN" ]; then
     echo "::error::aapt not found in PATH or $SDK_ROOT/build-tools" >&2
     exit 1
