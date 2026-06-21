@@ -72,11 +72,22 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
-        with:
-          packages: |
-            platform-tools
-            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
-            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
+
+      - name: Install required Android SDK components
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
+            exit 1
+          fi
+          sdkmanager --install \
+            'platform-tools' \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platforms;android-${ANDROID_COMPILE_SDK}"
+          printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
+          echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
 
       - name: Verify Android SDK tooling
         shell: bash
@@ -93,7 +104,6 @@ jobs:
           test -d "${sdk_root}/platforms/android-${ANDROID_COMPILE_SDK}"
           test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
           test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
-          echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
 
       - name: Ensure native build tools are present
         shell: bash
