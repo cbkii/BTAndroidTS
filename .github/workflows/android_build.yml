@@ -70,7 +70,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null
+          set +e
+          yes 2>/dev/null | sdkmanager --licenses >/dev/null
+          sdkmanager_license_status="${PIPESTATUS[1]}"
+          set -e
+          if [[ "${sdkmanager_license_status}" -ne 0 ]]; then
+            echo "::error::sdkmanager --licenses failed with exit code ${sdkmanager_license_status}."
+            exit "${sdkmanager_license_status}"
+          fi
           sdkmanager --channel=3 --install \
             "platform-tools" \
             "build-tools;${ANDROID_BUILD_TOOLS}" \
