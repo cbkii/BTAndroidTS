@@ -18,7 +18,7 @@ class OppShareActivity : Activity(), KoinComponent {
 		super.onCreate(savedInstanceState)
 		val result = AndroidOppShareIntentParser().parse(intent)
 		result.getOrNull()?.let { request ->
-			fileTransferController.delegateToStockOpp(request)
+			fileTransferController.delegateToStockOpp(this, request)
 		}
 		val launch = Intent(this, MainActivity::class.java).apply {
 			addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)

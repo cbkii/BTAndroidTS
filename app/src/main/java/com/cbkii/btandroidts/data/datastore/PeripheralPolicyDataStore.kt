@@ -8,7 +8,9 @@ import androidx.datastore.dataStore
 import com.cbkii.btandroidts.domain.peripheral.BluetoothAddress
 import com.cbkii.btandroidts.domain.peripheral.PeripheralPolicy
 import com.cbkii.btandroidts.domain.peripheral.PeripheralPolicyStore
+import com.cbkii.btandroidts.domain.peripheral.PeripheralReconnectResult
 import com.cbkii.btandroidts.domain.peripheral.PeripheralRetryState
+import com.cbkii.btandroidts.domain.peripheral.PeripheralRetryStateAction
 import com.cbkii.btandroidts.domain.peripheral.ProtectedPeripheralRecord
 import com.cbkii.btandroidts.domain.peripheral.ReconnectPolicy
 import com.cbkii.btandroidts.domain.peripheral.SavedPeripheralRecord
@@ -105,6 +107,37 @@ class PeripheralPolicyDataStore(
 				.clearSavedPeripherals()
 				.addAllSavedPeripherals(records)
 				.build()
+		}
+	}
+
+	override suspend fun applyReconnectResults(results: List<PeripheralReconnectResult>) {
+		if (results.isEmpty()) return
+		context.peripheralPolicyDataStore.updateData { prefs ->
+			val resultsByAddress = results.associateBy { it.address.value }
+			val retryUpdatesByAddress = results
+				.filterNot { it.retryStateAction == PeripheralRetryStateAction.UNCHANGED }
+				.associateBy { it.address.value }
+			val savedRecords = prefs.savedPeripheralsList.map { saved ->
+				val result = resultsByAddress[saved.address] ?: return@map saved
+				saved.toBuilder()
+					.setLastResult(result.result)
+					.setLastResultAtMillis(result.atMillis)
+					.build()
+			}
+			val builder = prefs.toBuilder()
+				.clearSavedPeripherals()
+				.addAllSavedPeripherals(savedRecords)
+			if (retryUpdatesByAddress.isNotEmpty()) {
+				builder
+					.clearRetryStates()
+					.addAllRetryStates(prefs.retryStatesList.filterNot { it.address in retryUpdatesByAddress.keys })
+				retryUpdatesByAddress.values.forEach { update ->
+					if (update.retryStateAction == PeripheralRetryStateAction.SET && update.retryState != null) {
+						builder.addRetryStates(update.retryState.toProto(update.address))
+					}
+				}
+			}
+			builder.build()
 		}
 	}
 }

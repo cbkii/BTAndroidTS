@@ -65,10 +65,11 @@ class LocalDiagnosticsExporter(
 			.sortedBy(File::getName)
 		return volumes.map { volume ->
 			val target = File(volume, "BTAndroidTS/diagnostics")
+			val writable = if (target.exists()) target.canWrite() else volume.canWrite()
 			DiagnosticsExportTarget(
 				label = "TS18 USB ${volume.name}",
 				path = target.absolutePath,
-				writable = target.exists() && target.canWrite(),
+				writable = writable,
 				evidence = EvidenceSource.REQUIRES_DEVICE_VALIDATION,
 			)
 		}

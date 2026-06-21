@@ -91,6 +91,10 @@
       android:name=".data.peripheral.PeripheralSupervisorService"
       android:exported="false"
       android:foregroundServiceType="connectedDevice" />
+    <service
+      android:name=".data.peripheral.PeripheralReconcileJobService"
+      android:exported="false"
+      android:permission="android.permission.BIND_JOB_SERVICE" />
     <receiver
       android:name=".data.peripheral.BluetoothReconcileReceiver"
       android:exported="false">

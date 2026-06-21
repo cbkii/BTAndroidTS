@@ -8,7 +8,7 @@ import com.cbkii.btandroidts.domain.peripheral.OppShareRequest
 class AndroidOppShareIntentParser {
 
 	@Suppress("DEPRECATION")
-	fun parse(intent: Intent): Result<OppShareRequest> {
+	fun parse(intent: Intent): Result<OppShareRequest> = runCatching {
 		val mimeType = intent.type
 		val items = when (intent.action) {
 			Intent.ACTION_SEND -> {
@@ -23,17 +23,16 @@ class AndroidOppShareIntentParser {
 			}
 			Intent.ACTION_SEND_MULTIPLE -> intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
 				.orEmpty()
+				.filterNotNull()
 				.map { uri -> OppShareItem(uri = uri, mimeType = mimeType) }
-			else -> return Result.failure(IllegalArgumentException("Unsupported share action: ${intent.action}"))
+			else -> throw IllegalArgumentException("Unsupported share action: ${intent.action}")
 		}.distinct()
 
-		if (items.isEmpty()) return Result.failure(IllegalArgumentException("Share intent did not include stream URIs or text"))
+		if (items.isEmpty()) throw IllegalArgumentException("Share intent did not include stream URIs or text")
 
-		return Result.success(
-			OppShareRequest(
-				items = items,
-				mimeType = mimeType,
-			)
+		OppShareRequest(
+			items = items,
+			mimeType = mimeType,
 		)
 	}
 }

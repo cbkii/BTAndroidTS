@@ -1,5 +1,6 @@
 package com.cbkii.btandroidts.data.opp
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -14,14 +15,13 @@ import kotlinx.coroutines.flow.StateFlow
 import java.util.UUID
 
 class AndroidFileTransferController(
-	context: Context,
 	private val store: OutgoingTransferStore,
 ) : FileTransferController {
 
-	private val appContext = context.applicationContext
 	override val history: StateFlow<List<OppTransferHistoryItem>> = store.history
 
 	override fun delegateToStockOpp(
+		launchContext: Context,
 		request: OppShareRequest,
 		destination: BluetoothAddress?,
 	): Result<OppTransferHistoryItem> {
@@ -36,13 +36,16 @@ class AndroidFileTransferController(
 		)
 		store.put(OutgoingTransferRecord(request, initial))
 		val intent = request.toStockOppIntent()
-		if (intent.resolveActivity(appContext.packageManager) == null) {
+		if (launchContext !is Activity) {
+			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+		}
+		if (intent.resolveActivity(launchContext.packageManager) == null) {
 			val message = "No stock OPP activity resolved"
 			store.updateState(id, OppTransferState.FAILED, message)
 			return Result.failure(IllegalStateException(message))
 		}
 		return runCatching {
-			appContext.startActivity(intent)
+			launchContext.startActivity(intent)
 			store.updateState(
 				id = id,
 				state = OppTransferState.DELEGATED_TO_STOCK_OPP,
@@ -59,9 +62,9 @@ class AndroidFileTransferController(
 		return Result.success(Unit)
 	}
 
-	override fun retry(id: String): Result<OppTransferHistoryItem> {
+	override fun retry(launchContext: Context, id: String): Result<OppTransferHistoryItem> {
 		val record = store.get(id) ?: return Result.failure(IllegalArgumentException("Unknown transfer id: $id"))
-		return delegateToStockOpp(record.request, record.historyItem.destination)
+		return delegateToStockOpp(launchContext, record.request, record.historyItem.destination)
 	}
 
 	private fun OppShareRequest.toStockOppIntent(): Intent {
@@ -73,19 +76,18 @@ class AndroidFileTransferController(
 				setPackage(STOCK_BLUETOOTH_PACKAGE)
 				this.type = type
 				putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList<Uri>(streamUris))
-				addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+				addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 			}
 			streamUris.size == 1 -> Intent(Intent.ACTION_SEND).apply {
 				setPackage(STOCK_BLUETOOTH_PACKAGE)
 				this.type = type
 				putExtra(Intent.EXTRA_STREAM, streamUris.single())
-				addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+				addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 			}
 			else -> Intent(Intent.ACTION_SEND).apply {
 				setPackage(STOCK_BLUETOOTH_PACKAGE)
 				this.type = type.takeIf { it != "*/*" } ?: "text/plain"
 				putExtra(Intent.EXTRA_TEXT, text)
-				addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 			}
 		}
 	}

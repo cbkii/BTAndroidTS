@@ -9,18 +9,18 @@ class BluetoothReconcileReceiver : BroadcastReceiver() {
 
 	override fun onReceive(context: Context, intent: Intent) {
 		when (intent.action) {
-			Intent.ACTION_BOOT_COMPLETED -> PeripheralSupervisorService.start(
+			Intent.ACTION_BOOT_COMPLETED -> PeripheralReconcileJobService.schedule(
 				context = context,
 				reason = "boot completed"
 			)
-			Intent.ACTION_MY_PACKAGE_REPLACED -> PeripheralSupervisorService.start(
+			Intent.ACTION_MY_PACKAGE_REPLACED -> PeripheralReconcileJobService.schedule(
 				context = context,
 				reason = "package replaced"
 			)
 			BluetoothAdapter.ACTION_STATE_CHANGED -> {
 				val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
 				if (state == BluetoothAdapter.STATE_ON) {
-					PeripheralSupervisorService.start(
+					PeripheralReconcileJobService.schedule(
 						context = context,
 						reason = "Bluetooth adapter on"
 					)

@@ -5,7 +5,9 @@ import com.cbkii.btandroidts.domain.peripheral.BluetoothDeviceInventoryRepositor
 import com.cbkii.btandroidts.domain.peripheral.HidHostController
 import com.cbkii.btandroidts.domain.peripheral.HidOperationResult
 import com.cbkii.btandroidts.domain.peripheral.PeripheralPolicyStore
+import com.cbkii.btandroidts.domain.peripheral.PeripheralReconnectResult
 import com.cbkii.btandroidts.domain.peripheral.PeripheralRetryState
+import com.cbkii.btandroidts.domain.peripheral.PeripheralRetryStateAction
 import com.cbkii.btandroidts.domain.peripheral.PeripheralSupervisor
 import com.cbkii.btandroidts.domain.peripheral.PeripheralSupervisorState
 import com.cbkii.btandroidts.domain.peripheral.ReconnectAttempt
@@ -105,33 +107,50 @@ class ApplicationPeripheralSupervisor(
 		inventoryRepository.refreshBondedDevices()
 
 		val now = System.currentTimeMillis()
+		val reconnectResults = mutableListOf<PeripheralReconnectResult>()
 		policy.savedPeripherals.forEach { saved ->
 			val retry = policy.retryStates[saved.address]
 			if (retry != null && retry.nextAttemptAtMillis > now) return@forEach
 			if ((retry?.attempt ?: 0) >= saved.policy.maxAttempts) {
-				policyStore.recordResult(saved.address, "Retry limit reached during $reason", now)
+				reconnectResults += PeripheralReconnectResult(
+					address = saved.address,
+					result = "Retry limit reached during $reason",
+					atMillis = now,
+				)
 				return@forEach
 			}
 
 			val result = hidHostController.connect(saved.address)
 			val resultText = result.toResultText()
-			policyStore.recordResult(saved.address, resultText, System.currentTimeMillis())
-			when (result) {
+			val resultAt = System.currentTimeMillis()
+			val retryStateAction = when (result) {
 				HidOperationResult.Started,
-				HidOperationResult.RequiresDeviceValidation -> policyStore.setRetryState(saved.address, null)
+				HidOperationResult.RequiresDeviceValidation -> PeripheralRetryStateAction.CLEAR
+				else -> PeripheralRetryStateAction.SET
+			}
+			val retryState = when (result) {
+				HidOperationResult.Started,
+				HidOperationResult.RequiresDeviceValidation -> null
 				else -> {
 					val nextAttempt = (retry?.attempt ?: 0) + 1
 					val delayMillis = ReconnectBackoff.nextDelayMillis(saved.policy, nextAttempt, saved.address)
-					policyStore.setRetryState(
-						saved.address,
-						PeripheralRetryState(
-							attempt = nextAttempt,
-							nextAttemptAtMillis = System.currentTimeMillis() + delayMillis,
-							lastError = resultText,
-						)
+					PeripheralRetryState(
+						attempt = nextAttempt,
+						nextAttemptAtMillis = resultAt + delayMillis,
+						lastError = resultText,
 					)
 				}
 			}
+			reconnectResults += PeripheralReconnectResult(
+				address = saved.address,
+				result = resultText,
+				atMillis = resultAt,
+				retryStateAction = retryStateAction,
+				retryState = retryState,
+			)
+		}
+		if (reconnectResults.isNotEmpty()) {
+			policyStore.applyReconnectResults(reconnectResults)
 		}
 		_state.update { it.copy(lastEvent = "Reconciled saved peripherals: $reason") }
 		return Result.success(Unit)

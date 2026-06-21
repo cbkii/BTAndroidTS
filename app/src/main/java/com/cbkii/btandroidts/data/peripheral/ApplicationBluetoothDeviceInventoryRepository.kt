@@ -24,6 +24,7 @@ import com.cbkii.btandroidts.domain.peripheral.ScanStatus
 import com.cbkii.btandroidts.domain.peripheral.UnifiedBluetoothDevice
 import com.cbkii.btandroidts.domain.peripheral.UnifiedBluetoothInventoryMerger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -123,25 +124,35 @@ class ApplicationBluetoothDeviceInventoryRepository(
 			activeTransports = transports,
 		)
 
-		scanJob = scope.launch {
+		lateinit var job: Job
+		job = scope.launch(start = CoroutineStart.LAZY) {
 			try {
 				startRequestedScans(request)
-				_scanState.update { it.copy(status = ScanStatus.RUNNING, lastError = null) }
+				if (scanJob === job) {
+					_scanState.update { it.copy(status = ScanStatus.RUNNING, lastError = null) }
+				}
 				delay(request.durationMillis)
 			} catch (cancellation: CancellationException) {
 				throw cancellation
 			} catch (error: Throwable) {
-				_scanState.update {
-					it.copy(status = ScanStatus.FAILED, lastError = error.message ?: error::class.simpleName)
+				if (scanJob === job) {
+					_scanState.update {
+						it.copy(status = ScanStatus.FAILED, lastError = error.message ?: error::class.simpleName)
+					}
 				}
 			} finally {
-				stopUnderlyingScans()
-				_scanState.update {
-					if (it.status == ScanStatus.FAILED) it.copy(activeTransports = emptySet())
-					else BoundedScanState()
+				if (scanJob === job) {
+					stopUnderlyingScans()
+					_scanState.update {
+						if (it.status == ScanStatus.FAILED) it.copy(activeTransports = emptySet())
+						else BoundedScanState()
+					}
+					scanJob = null
 				}
 			}
 		}
+		scanJob = job
+		job.start()
 		return Result.success(Unit)
 	}
 

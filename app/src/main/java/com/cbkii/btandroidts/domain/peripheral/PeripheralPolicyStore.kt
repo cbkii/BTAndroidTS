@@ -14,6 +14,7 @@ interface PeripheralPolicyStore {
 	suspend fun removeProtectedDevice(address: BluetoothAddress)
 	suspend fun setRetryState(address: BluetoothAddress, retryState: PeripheralRetryState?)
 	suspend fun recordResult(address: BluetoothAddress, result: String, atMillis: Long)
+	suspend fun applyReconnectResults(results: List<PeripheralReconnectResult>)
 }
 
 data class PeripheralPolicy(
@@ -48,3 +49,23 @@ data class PeripheralRetryState(
 	val nextAttemptAtMillis: Long,
 	val lastError: String? = null,
 )
+
+data class PeripheralReconnectResult(
+	val address: BluetoothAddress,
+	val result: String,
+	val atMillis: Long,
+	val retryStateAction: PeripheralRetryStateAction = PeripheralRetryStateAction.UNCHANGED,
+	val retryState: PeripheralRetryState? = null,
+) {
+	init {
+		require(retryStateAction != PeripheralRetryStateAction.SET || retryState != null) {
+			"retryState is required when retryStateAction is SET"
+		}
+	}
+}
+
+enum class PeripheralRetryStateAction {
+	UNCHANGED,
+	CLEAR,
+	SET,
+}

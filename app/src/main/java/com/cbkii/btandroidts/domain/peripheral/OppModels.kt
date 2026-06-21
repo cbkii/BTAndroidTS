@@ -1,5 +1,6 @@
 package com.cbkii.btandroidts.domain.peripheral
 
+import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.flow.StateFlow
 
@@ -26,9 +27,13 @@ data class OppShareItem(
 interface FileTransferController {
 	val history: StateFlow<List<OppTransferHistoryItem>>
 
-	fun delegateToStockOpp(request: OppShareRequest, destination: BluetoothAddress? = null): Result<OppTransferHistoryItem>
+	fun delegateToStockOpp(
+		launchContext: Context,
+		request: OppShareRequest,
+		destination: BluetoothAddress? = null,
+	): Result<OppTransferHistoryItem>
 	fun cancel(id: String): Result<Unit>
-	fun retry(id: String): Result<OppTransferHistoryItem>
+	fun retry(launchContext: Context, id: String): Result<OppTransferHistoryItem>
 }
 
 interface OutgoingTransferStore {

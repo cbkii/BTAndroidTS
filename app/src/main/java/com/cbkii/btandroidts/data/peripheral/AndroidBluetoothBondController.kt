@@ -37,6 +37,11 @@ class AndroidBluetoothBondController(
 		val device = getRemoteDevice(address)
 			?: return BondingResult.Failed(BondFailureReason.ADAPTER_UNAVAILABLE)
 		if (device.bondState == BluetoothDevice.BOND_BONDED) return BondingResult.AlreadyBonded
+		if (device.bondState == BluetoothDevice.BOND_BONDING) {
+			return awaitBondTerminalState(address) {
+				// Bonding is already active, so only observe the terminal broadcast.
+			}
+		}
 
 		return awaitBondTerminalState(address) {
 			if (!device.createBond()) {

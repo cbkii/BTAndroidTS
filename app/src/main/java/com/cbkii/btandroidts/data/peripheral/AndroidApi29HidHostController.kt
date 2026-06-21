@@ -96,7 +96,13 @@ class AndroidApi29HidHostController(
 			suspendCancellableCoroutine<BluetoothProfile?> { continuation ->
 				val listener = object : BluetoothProfile.ServiceListener {
 					override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
-						if (profile == HID_HOST_PROFILE_ID && continuation.isActive) continuation.resume(proxy)
+						if (profile == HID_HOST_PROFILE_ID) {
+							if (continuation.isActive) {
+								continuation.resume(proxy)
+							} else {
+								adapter.closeProfileProxy(profile, proxy)
+							}
+						}
 					}
 
 					override fun onServiceDisconnected(profile: Int) {

@@ -1,10 +1,8 @@
 package com.cbkii.btandroidts.data.peripheral
 
-import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -80,20 +78,18 @@ class PeripheralSupervisorService : Service(), KoinComponent {
 		if (!policy.supervisionEnabled || policy.safeModeEnabled) return
 		val nextAt = policy.retryStates.values
 			.map { it.nextAttemptAtMillis }
+			.filter { it > System.currentTimeMillis() }
 			.minOrNull()
 			?: return
-		val alarmManager = getSystemService<AlarmManager>() ?: return
-		alarmManager.set(
-			AlarmManager.RTC_WAKEUP,
-			nextAt,
-			pendingServiceIntent(this, ACTION_RECONCILE, "scheduled retry")
+		PeripheralReconcileJobService.schedule(
+			context = this,
+			reason = "scheduled retry",
+			minLatencyMillis = nextAt - System.currentTimeMillis()
 		)
 	}
 
 	private fun cancelScheduledRetry() {
-		getSystemService<AlarmManager>()?.cancel(
-			pendingServiceIntent(this, ACTION_RECONCILE, "scheduled retry")
-		)
+		PeripheralReconcileJobService.cancel(this)
 	}
 
 	private fun startAsForeground(reason: String) {
@@ -153,7 +149,6 @@ class PeripheralSupervisorService : Service(), KoinComponent {
 		private const val EXTRA_REASON = "com.cbkii.btandroidts.extra.RECONCILE_REASON"
 		private const val NOTIFICATION_CHANNEL_ID = "btandroidts_supervisor"
 		private const val NOTIFICATION_ID = 1801
-		private const val RETRY_REQUEST_CODE = 1802
 
 		fun start(context: Context, action: String = ACTION_RECONCILE, reason: String) {
 			val intent = Intent(context, PeripheralSupervisorService::class.java)
@@ -164,23 +159,6 @@ class PeripheralSupervisorService : Service(), KoinComponent {
 			} else {
 				context.startService(intent)
 			}
-		}
-
-		private fun pendingServiceIntent(
-			context: Context,
-			action: String,
-			reason: String,
-		): PendingIntent {
-			val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-				if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
-			return PendingIntent.getService(
-				context,
-				RETRY_REQUEST_CODE,
-				Intent(context, PeripheralSupervisorService::class.java)
-					.setAction(action)
-					.putExtra(EXTRA_REASON, reason),
-				flags
-			)
 		}
 	}
 }
