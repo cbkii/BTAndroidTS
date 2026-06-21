@@ -21,6 +21,8 @@ import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.presentation.composables.BTAppNavigationDrawer
 import com.cbkii.btandroidts.presentation.feature_devices.BTDeviceViewmodel
 import com.cbkii.btandroidts.presentation.feature_devices.BTDevicesRoute
+import com.cbkii.btandroidts.presentation.feature_devices.Ts18DashboardAction
+import com.cbkii.btandroidts.presentation.feature_devices.state.BTDevicesScreenEvents
 import com.cbkii.btandroidts.presentation.navigation.UIEventsSideEffect
 import com.cbkii.btandroidts.presentation.navigation.args.toArgs
 import com.cbkii.btandroidts.presentation.navigation.config.RouteAnimation
@@ -96,6 +98,16 @@ fun AnimatedVisibilityScope.BTDevicesScreen(
 				onSelectLeDevice = { device ->
 					val args = device.toArgs()
 					navigator.navigate(BleClientRouteDestination(args))
+				},
+				onDashboardAction = { action ->
+					when (action) {
+						Ts18DashboardAction.PHONE_AUTO -> viewModel.onEvents(BTDevicesScreenEvents.OpenTopwayBluetooth)
+						Ts18DashboardAction.PERIPHERALS -> viewModel.onEvents(BTDevicesScreenEvents.ShowPeripheralManager)
+						Ts18DashboardAction.FILE_SHARING -> viewModel.onEvents(BTDevicesScreenEvents.ShowFileSharing)
+						Ts18DashboardAction.SUPERVISION -> viewModel.onEvents(BTDevicesScreenEvents.ManualSupervisorRetry)
+						Ts18DashboardAction.DIAGNOSTICS -> viewModel.onEvents(BTDevicesScreenEvents.ExportDiagnostics)
+						Ts18DashboardAction.ADVANCED_TOOLS -> viewModel.onEvents(BTDevicesScreenEvents.ShowAdvancedTools)
+					}
 				},
 				navigation = {
 					IconButton(

@@ -28,6 +28,10 @@
   <string name="ts18_dashboard_inventory_count">%1$d seen, %2$d protected</string>
   <string name="ts18_dashboard_file_share">File Sharing</string>
   <string name="ts18_dashboard_supervision">Supervision</string>
+  <string name="ts18_dashboard_diagnostics">Diagnostics</string>
+  <string name="ts18_dashboard_advanced">Advanced Tools</string>
+  <string name="ts18_dashboard_local_export">Local export</string>
+  <string name="ts18_dashboard_rfcomm_gatt">RFCOMM / BLE GATT</string>
   <string name="ts18_dashboard_scanning">Scanning</string>
   <string name="ts18_dashboard_available">Available</string>
   <string name="ts18_dashboard_requires_privilege">Requires privilege</string>
@@ -35,6 +39,9 @@
   <string name="ts18_dashboard_requires_validation">Needs TS18 test</string>
   <string name="ts18_dashboard_failed">Failed</string>
   <string name="ts18_dashboard_unavailable">Unavailable</string>
+  <string name="supervisor_notification_title">BTAndroidTS supervision</string>
+  <string name="supervisor_notification_channel">Peripheral supervision</string>
+  <string name="supervisor_notification_channel_desc">Finite reconnect reconciliation for explicitly saved peripherals.</string>
   <string name="bt_client_route">Bluetooth Client</string>
   <string name="allow_discover">Allow Discoverability</string>
   <string name="device_discoverable_success">Device is now discoverable %d seconds</string>

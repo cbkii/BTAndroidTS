@@ -2,6 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   xmlns:tools="http://schemas.android.com/tools">
 
+  <queries>
+    <package android:name="com.android.bluetooth" />
+    <package android:name="com.tw.bt" />
+    <package android:name="com.tw.service" />
+    <package android:name="com.tw.core" />
+    <package android:name="com.tw.coreservice" />
+    <package android:name="com.tw.carinfoservice" />
+    <package android:name="com.tw.music" />
+    <package android:name="com.tw.media" />
+    <package android:name="com.zlink" />
+    <package android:name="com.zjinnova.zlink" />
+    <package android:name="com.tlink" />
+    <package android:name="com.syu.ms" />
+  </queries>
+
   <uses-permission
     android:name="android.permission.BLUETOOTH"
     android:maxSdkVersion="30" />
@@ -15,6 +30,11 @@
     tools:targetApi="s" />
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
   <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission
+    android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
+    tools:targetApi="34" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
   <!--  Location permissions are required for BLE scan-->
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -67,6 +87,19 @@
         <data android:mimeType="*/*" />
       </intent-filter>
     </activity>
+    <service
+      android:name=".data.peripheral.PeripheralSupervisorService"
+      android:exported="false"
+      android:foregroundServiceType="connectedDevice" />
+    <receiver
+      android:name=".data.peripheral.BluetoothReconcileReceiver"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+        <action android:name="android.bluetooth.adapter.action.STATE_CHANGED" />
+      </intent-filter>
+    </receiver>
   </application>
 
 </manifest>

@@ -51,5 +51,8 @@ jobs:
       - name: Assemble TS18 privileged release
         run: ./gradlew assembleTs18PrivilegedRelease --stacktrace
 
-      - name: Validate Magisk package when present
+      - name: Package Magisk module
+        run: sh scripts/package-magisk.sh
+
+      - name: Validate Magisk package
         run: sh scripts/validate-magisk-package.sh

@@ -9,7 +9,10 @@ import com.cbkii.btandroidts.domain.peripheral.BluetoothDeviceInventoryRepositor
 import com.cbkii.btandroidts.domain.peripheral.BluetoothScanRequest
 import com.cbkii.btandroidts.domain.peripheral.BondStatus
 import com.cbkii.btandroidts.domain.peripheral.DeviceTransport
+import com.cbkii.btandroidts.domain.peripheral.DiagnosticsExporter
+import com.cbkii.btandroidts.domain.peripheral.PeripheralSupervisorScheduler
 import com.cbkii.btandroidts.domain.peripheral.ScanStatus
+import com.cbkii.btandroidts.domain.peripheral.TopwayLaneAdapter
 import com.cbkii.btandroidts.domain.peripheral.UnifiedBluetoothDevice
 import com.cbkii.btandroidts.presentation.feature_devices.state.BTDevicesScreenEvents
 import com.cbkii.btandroidts.presentation.feature_devices.state.BTDevicesScreenState
@@ -33,6 +36,9 @@ import kotlinx.coroutines.launch
 class BTDeviceViewmodel(
 	private val inventoryRepository: BluetoothDeviceInventoryRepository,
 	private val bLEScanner: BluetoothLEScanner,
+	private val peripheralSupervisorScheduler: PeripheralSupervisorScheduler,
+	private val topwayLaneAdapter: TopwayLaneAdapter,
+	private val diagnosticsExporter: DiagnosticsExporter,
 ) : AppViewModel() {
 
 	private val _isPairedDevicesReady = MutableStateFlow(false)
@@ -107,11 +113,42 @@ class BTDeviceViewmodel(
 			BTDevicesScreenEvents.OnStopAnyRunningScan -> stopInventoryScan()
 			BTDevicesScreenEvents.StartLEDeviceScan -> startInventoryScan(includeClassic = false, includeBle = true)
 			BTDevicesScreenEvents.StopLEDevicesScan -> stopInventoryScan()
+			BTDevicesScreenEvents.OpenTopwayBluetooth -> launchTopwayBluetooth()
+			BTDevicesScreenEvents.ShowPeripheralManager -> showMessage("Select a device to manage ACL, HID Host, RFCOMM terminal or BLE GATT actions explicitly.")
+			BTDevicesScreenEvents.ShowFileSharing -> showMessage("Use Android Share to send files to BTAndroidTS; outbound transfer delegates to stock Bluetooth OPP.")
+			BTDevicesScreenEvents.ManualSupervisorRetry -> manualSupervisorRetry()
+			BTDevicesScreenEvents.ExportDiagnostics -> exportDiagnostics()
+			BTDevicesScreenEvents.ShowAdvancedTools -> showMessage("Advanced tools remain under device-specific RFCOMM terminal and BLE GATT screens.")
 			is BTDevicesScreenEvents.OnBTPermissionChanged -> _hasBtPermission.update { event.isGranted }
 			is BTDevicesScreenEvents.OnLocationPermissionChanged -> {
 				// nothing to be look for
 			}
 		}
+	}
+
+	private fun launchTopwayBluetooth() = viewModelScope.launch {
+		topwayLaneAdapter.launchPhoneBluetoothUi()
+			.onFailure { error -> _uiEvents.emit(UiEvents.ShowSnackBar(error.message ?: "Topway Bluetooth UI unavailable")) }
+	}
+
+	private fun manualSupervisorRetry() = viewModelScope.launch {
+		peripheralSupervisorScheduler.requestManualRetry("dashboard manual retry")
+			.onSuccess { _uiEvents.emit(UiEvents.ShowToast("Supervisor reconcile requested")) }
+			.onFailure { error -> _uiEvents.emit(UiEvents.ShowSnackBar(error.message ?: "Supervisor reconcile failed")) }
+	}
+
+	private fun exportDiagnostics() = viewModelScope.launch {
+		diagnosticsExporter.exportLocal()
+			.onSuccess { result ->
+				_uiEvents.emit(UiEvents.ShowSnackBar("Diagnostics exported: ${result.path}"))
+			}
+			.onFailure { error ->
+				_uiEvents.emit(UiEvents.ShowSnackBar(error.message ?: "Diagnostics export failed"))
+			}
+	}
+
+	private fun showMessage(message: String) = viewModelScope.launch {
+		_uiEvents.emit(UiEvents.ShowToast(message))
 	}
 
 	private fun setPairedDevices() {

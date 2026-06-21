@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+option java_package = "com.cbkii.btandroidts.data.datastore";
+option java_multiple_files = true;
+
+message PeripheralPolicyPreferences {
+  bool supervision_enabled = 1;
+  bool safe_mode_enabled = 2;
+  repeated SavedPeripheralPreference saved_peripherals = 3;
+  repeated ProtectedDevicePreference protected_devices = 4;
+  repeated RetryStatePreference retry_states = 5;
+}
+
+message SavedPeripheralPreference {
+  string address = 1;
+  string display_name = 2;
+  ReconnectPolicyPreference reconnect_policy = 3;
+  int64 saved_at_millis = 4;
+  string last_result = 5;
+  int64 last_result_at_millis = 6;
+  bool expert_override = 7;
+  string protection_reason = 8;
+}
+
+message ProtectedDevicePreference {
+  string address = 1;
+  string display_name = 2;
+  string reason = 3;
+  bool expert_override = 4;
+  int64 updated_at_millis = 5;
+}
+
+message ReconnectPolicyPreference {
+  int32 max_attempts = 1;
+  int64 initial_delay_millis = 2;
+  int64 max_delay_millis = 3;
+}
+
+message RetryStatePreference {
+  string address = 1;
+  int32 attempt = 2;
+  int64 next_attempt_at_millis = 3;
+  string last_error = 4;
+}

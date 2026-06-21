@@ -5,13 +5,20 @@ import kotlinx.coroutines.flow.StateFlow
 interface PeripheralSupervisor {
 	val state: StateFlow<PeripheralSupervisorState>
 
-	fun savePeripheral(address: BluetoothAddress, policy: ReconnectPolicy): Result<Unit>
-	fun removeSavedPeripheral(address: BluetoothAddress): Result<Unit>
-	fun setEnabled(enabled: Boolean)
+	suspend fun savePeripheral(address: BluetoothAddress, policy: ReconnectPolicy): Result<Unit>
+	suspend fun removeSavedPeripheral(address: BluetoothAddress): Result<Unit>
+	suspend fun setEnabled(enabled: Boolean)
+	suspend fun reconcile(reason: String): Result<Unit>
+}
+
+interface PeripheralSupervisorScheduler {
+	fun requestManualRetry(reason: String): Result<Unit>
+	fun setSupervisionEnabled(enabled: Boolean, reason: String): Result<Unit>
 }
 
 data class PeripheralSupervisorState(
 	val enabled: Boolean = false,
+	val safeModeEnabled: Boolean = true,
 	val savedPeripherals: List<SavedPeripheral> = emptyList(),
 	val activeAttempts: List<ReconnectAttempt> = emptyList(),
 	val lastEvent: String? = null,
@@ -42,3 +49,18 @@ data class ReconnectAttempt(
 	val nextAttemptAtMillis: Long,
 	val reason: String,
 )
+
+object ReconnectBackoff {
+	fun nextDelayMillis(
+		policy: ReconnectPolicy,
+		attemptNumber: Int,
+		address: BluetoothAddress,
+	): Long {
+		val multiplier = 1L shl attemptNumber.coerceIn(0, 4)
+		val base = (policy.initialDelayMillis * multiplier).coerceAtMost(policy.maxDelayMillis)
+		val jitter = (address.value.hashCode().toLong() and Long.MAX_VALUE) % JITTER_WINDOW_MILLIS
+		return (base + jitter).coerceAtMost(policy.maxDelayMillis)
+	}
+
+	private const val JITTER_WINDOW_MILLIS = 750L
+}

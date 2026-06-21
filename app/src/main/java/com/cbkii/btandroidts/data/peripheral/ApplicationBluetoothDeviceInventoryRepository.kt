@@ -13,6 +13,7 @@ import com.cbkii.btandroidts.domain.peripheral.BluetoothAddress
 import com.cbkii.btandroidts.domain.peripheral.BluetoothBondController
 import com.cbkii.btandroidts.domain.peripheral.BluetoothDeviceInventoryRepository
 import com.cbkii.btandroidts.domain.peripheral.BluetoothScanRequest
+import com.cbkii.btandroidts.domain.peripheral.BondingResult
 import com.cbkii.btandroidts.domain.peripheral.BondStatus
 import com.cbkii.btandroidts.domain.peripheral.BoundedScanState
 import com.cbkii.btandroidts.domain.peripheral.CapabilityRegistry

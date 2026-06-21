@@ -16,4 +16,15 @@ if grep -R -q 'android.permission.BLUETOOTH_STACK\|android.uid.system\|sharedUse
   exit 1
 fi
 
+if grep -q 'PeripheralSupervisorService' "$MAIN_MANIFEST"; then
+  test -f app/src/main/java/com/cbkii/btandroidts/data/peripheral/PeripheralSupervisorService.kt
+  grep -q 'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE' "$MAIN_MANIFEST"
+  grep -q 'android:foregroundServiceType="connectedDevice"' "$MAIN_MANIFEST"
+fi
+
+if grep -q 'BluetoothReconcileReceiver' "$MAIN_MANIFEST"; then
+  test -f app/src/main/java/com/cbkii/btandroidts/data/peripheral/BluetoothReconcileReceiver.kt
+  grep -q 'android.permission.RECEIVE_BOOT_COMPLETED' "$MAIN_MANIFEST"
+fi
+
 echo "BTAndroidTS manifest permission split is valid"

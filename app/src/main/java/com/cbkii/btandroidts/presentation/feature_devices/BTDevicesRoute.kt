@@ -25,9 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.datasource.CollectionPreviewParameterProvider
+import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.data.utils.hasBTScanPermission
 import com.cbkii.btandroidts.data.utils.hasLocationPermission
@@ -58,6 +60,7 @@ fun BTDevicesRoute(
 	initialTab: BluetoothTypes = BluetoothTypes.CLASSIC,
 	onSelectDevice: (BluetoothDeviceModel) -> Unit = {},
 	onSelectLeDevice: (BluetoothLEDeviceModel) -> Unit = {},
+	onDashboardAction: (Ts18DashboardAction) -> Unit = {},
 	navigation: @Composable () -> Unit = {},
 ) {
 	val context = LocalContext.current
@@ -113,6 +116,7 @@ fun BTDevicesRoute(
 			Ts18DashboardHeader(
 				state = state,
 				isScanning = isScanning,
+				onAction = onDashboardAction,
 				modifier = Modifier
 					.fillMaxWidth()
 					.padding(horizontal = dimensionResource(R.dimen.sc_padding))
@@ -173,6 +177,7 @@ fun BTDevicesRoute(
 private fun Ts18DashboardHeader(
 	state: BTDevicesScreenState,
 	isScanning: Boolean,
+	onAction: (Ts18DashboardAction) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	val hidStatus = state.capabilities.firstOrNull { it.feature == PeripheralFeature.HID_HOST }?.status
@@ -195,6 +200,7 @@ private fun Ts18DashboardHeader(
 				DashboardButton(
 					label = stringResource(R.string.ts18_dashboard_phone_auto),
 					detail = stringResource(R.string.ts18_dashboard_vendor_owned),
+					onClick = { onAction(Ts18DashboardAction.PHONE_AUTO) },
 					modifier = Modifier.weight(1f)
 				)
 				DashboardButton(
@@ -204,17 +210,37 @@ private fun Ts18DashboardHeader(
 						state.inventoryDevices.size,
 						protectedCount
 					),
+					onClick = { onAction(Ts18DashboardAction.PERIPHERALS) },
 					modifier = Modifier.weight(1f)
 				)
 				DashboardButton(
 					label = stringResource(R.string.ts18_dashboard_file_share),
 					detail = oppStatus.toDashboardText(),
+					onClick = { onAction(Ts18DashboardAction.FILE_SHARING) },
 					modifier = Modifier.weight(1f)
 				)
 				DashboardButton(
 					label = stringResource(R.string.ts18_dashboard_supervision),
 					detail = if (isScanning) stringResource(R.string.ts18_dashboard_scanning)
 					else hidStatus.toDashboardText(),
+					onClick = { onAction(Ts18DashboardAction.SUPERVISION) },
+					modifier = Modifier.weight(1f)
+				)
+			}
+			Row(
+				horizontalArrangement = Arrangement.spacedBy(8.dp),
+				modifier = Modifier.fillMaxWidth()
+			) {
+				DashboardButton(
+					label = stringResource(R.string.ts18_dashboard_diagnostics),
+					detail = stringResource(R.string.ts18_dashboard_local_export),
+					onClick = { onAction(Ts18DashboardAction.DIAGNOSTICS) },
+					modifier = Modifier.weight(1f)
+				)
+				DashboardButton(
+					label = stringResource(R.string.ts18_dashboard_advanced),
+					detail = stringResource(R.string.ts18_dashboard_rfcomm_gatt),
+					onClick = { onAction(Ts18DashboardAction.ADVANCED_TOOLS) },
 					modifier = Modifier.weight(1f)
 				)
 			}
@@ -226,10 +252,11 @@ private fun Ts18DashboardHeader(
 private fun DashboardButton(
 	label: String,
 	detail: String,
+	onClick: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	FilledTonalButton(
-		onClick = {},
+		onClick = onClick,
 		modifier = modifier,
 	) {
 		Column {
@@ -240,6 +267,15 @@ private fun DashboardButton(
 			)
 		}
 	}
+}
+
+enum class Ts18DashboardAction {
+	PHONE_AUTO,
+	PERIPHERALS,
+	FILE_SHARING,
+	SUPERVISION,
+	DIAGNOSTICS,
+	ADVANCED_TOOLS,
 }
 
 @Composable

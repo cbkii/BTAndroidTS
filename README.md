@@ -40,10 +40,13 @@ changing the application data identity.
 - BLE server tools retained as advanced diagnostics.
 - TS18 documentation, safety boundaries, validation matrix, and build-flavour baseline added for
   the peripheral-manager transformation.
+- Unified Classic/BLE inventory, protected-device policy, persisted supervision policy, finite
+  reconcile service, read-only Topway package inspection, stock OPP delegation, and bounded local
+  diagnostics export are implemented as v1 app behavior.
 
-The project is in active transformation. Device-level HID Host, OPP, supervisor, diagnostics, and
-Magisk packaging work is tracked in the validation matrix and must not be reported as TS18-passed
-until captured on real hardware.
+The project is in active transformation. Device-level HID Host connection, Android input-node
+creation, OPP destination/progress behavior, ACC sleep/wake, calls, projection, and Magisk
+privileged grants must not be reported as TS18-passed until captured on real hardware.
 
 ## Safety Boundaries
 
@@ -71,6 +74,9 @@ for current task completeness.
 ./gradlew assembleStandardRelease
 ./gradlew assembleTs18PrivilegedDebug
 ./gradlew assembleTs18PrivilegedRelease
+sh scripts/check-manifest-permissions.sh
+sh scripts/package-magisk.sh
+sh scripts/validate-magisk-package.sh
 ```
 
 Release builds run R8. Reflection-dependent Bluetooth code must use narrow keep rules only.

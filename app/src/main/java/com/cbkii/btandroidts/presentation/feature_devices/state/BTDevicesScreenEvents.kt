@@ -37,4 +37,10 @@ sealed interface BTDevicesScreenEvents {
 	 */
 	data object OnStopAnyRunningScan : BTDevicesScreenEvents
 
+	data object OpenTopwayBluetooth : BTDevicesScreenEvents
+	data object ShowPeripheralManager : BTDevicesScreenEvents
+	data object ShowFileSharing : BTDevicesScreenEvents
+	data object ManualSupervisorRetry : BTDevicesScreenEvents
+	data object ExportDiagnostics : BTDevicesScreenEvents
+	data object ShowAdvancedTools : BTDevicesScreenEvents
 }

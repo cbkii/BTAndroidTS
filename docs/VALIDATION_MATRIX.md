@@ -19,21 +19,21 @@ new BTAndroidTS feature.
 | Display/input baseline | Observed passed | 1280x720 physical, 1225x720 app area, stable content `[0,55]-[1225,720]`, raw touch 1024x600 scaled. |
 | Standard APK builds | Not tested | Code unchanged in this second pass; first-pass local build is repository validation, not exact-device runtime evidence. |
 | TS18 privileged APK builds | Not tested | Code unchanged in this second pass; privileged grant still needs on-device validation after systemless placement. |
-| Magisk ZIP structure | Not tested | Package work pending. |
+| Magisk ZIP structure | Not tested | Packaging script and validator are implemented; local/CI run required after `assembleTs18PrivilegedRelease`. |
 | Classic discovery raw results | Requires device validation | Existing app has Classic scanning, but TS18 manager flow pending. |
 | BLE discovery raw results | Requires device validation | Existing app has BLE scanning, but non-connectable filtering must be corrected. |
-| Awaited bonding state machine | Not tested | Implementation pending. |
-| Protected selective unpairing | Not tested | Implementation pending. |
-| HID Host capability detection | Not tested | Implementation pending. |
+| Awaited bonding state machine | Not tested | Broadcast-waiting implementation exists; requires automated and TS18 runtime validation. |
+| Protected selective unpairing | Not tested | Protected selective unpair path exists; privileged behavior requires TS18 validation. |
+| HID Host capability detection | Not tested | API-29 reflection adapter and narrow R8 rules exist; release/runtime validation required. |
 | HID profile connect/disconnect | Requires device validation | Must be tested on TS18 hardware. |
 | Android input-node verification | Requires device validation | Must use `InputManager`/`InputDevice` evidence. |
-| Supervisor survives UI closure | Not tested | Implementation pending. |
-| Finite auto-reconnect | Not tested | Implementation pending. |
-| OPP stock delegation | Requires device validation | OPP components are present in package evidence, but picker/delegation behavior is untested. |
+| Supervisor survives UI closure | Requires device validation | Service/receiver/persisted policy implementation exists; must be validated after activity close, process death and boot. |
+| Finite auto-reconnect | Requires device validation | Persisted retry state and bounded scheduling exist; real HID reconnect remains TS18 validation. |
+| OPP stock delegation | Requires device validation | Stock `com.android.bluetooth` delegation is implemented; picker/destination/progress behavior is untested on TS18. |
 | Incoming OPP preserved | Requires device validation | Must not start a competing inbound server. |
 | Topway phone lane unaffected | Requires device validation | Includes HFP, A2DP, PBAP, TLink/ZLink checks. |
-| Safe mode disables experimental paths | Not tested | Implementation pending. |
-| Diagnostics export | Not tested | Implementation pending. |
+| Safe mode disables experimental paths | Not tested | Policy default is safe mode enabled and supervisor skips hidden reconnects; UI controls and TS18 proof remain. |
+| Diagnostics export | Not tested | Bounded local export implementation exists; local build and TS18 storage validation remain. |
 | USB export to `/storage/usbdiskN` | Requires device validation | Must handle absent DocumentsUI and media removal. |
 | UI stable within TS18 insets | Requires device validation | Stable content `[0,55]-[1225,720]`; avoid phone portrait assumptions. |
 | Low-impact notifications/jobs | Requires device validation | Capture shows active OEM foreground services and job limits; BTAndroidTS must prove bounded behavior. |
