@@ -25,10 +25,15 @@ jobs:
       - name: Grant execute permission to gradlew
         run: chmod +x gradlew
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install Android SDK API 37 preview
+        env:
+          ANDROID_COMPILE_SDK: "37"
         run: |
           yes | sdkmanager --licenses
-          sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
+          sdkmanager --channel=3 "platform-tools" "platforms;android-${ANDROID_COMPILE_SDK}"
 
       - name: Unit tests
         run: ./gradlew testStandardDebugUnitTest --stacktrace
