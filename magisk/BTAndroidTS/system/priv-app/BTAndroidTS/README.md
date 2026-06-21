@@ -1,5 +1,7 @@
 # APK placement
 
+Audience: release builders and reviewers.
+
 Place the signed `ts18PrivilegedRelease` APK here as `BTAndroidTS.apk` when building the final
 Magisk ZIP.
 

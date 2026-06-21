@@ -1,5 +1,8 @@
 # BTAndroidTS Magisk Module
 
+Audience: release builders, reviewers, maintainers, and AI agents. End users should receive a
+prebuilt module with rollback instructions.
+
 This module is the privileged TS18 deployment shape for `com.cbkii.btandroidts`.
 
 It must contain:

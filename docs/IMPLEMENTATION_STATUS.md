@@ -1,5 +1,8 @@
 # BTAndroidTS Implementation Status
 
+Audience: developers, reviewers, maintainers, and AI agents. End-user installation and usage
+belongs in `README.md`.
+
 Status terms:
 
 - Complete: implemented in this branch and covered by code or docs.

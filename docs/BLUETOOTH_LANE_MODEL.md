@@ -1,5 +1,8 @@
 # Bluetooth Lane Model
 
+Audience: developers, reviewers, maintainers, and AI agents. This file explains the separation
+between Android peripheral Bluetooth and the protected Topway automotive lane.
+
 BTAndroidTS uses a tandem model. It improves user-facing management of Android peripherals without
 replacing the Bluetooth stacks.
 

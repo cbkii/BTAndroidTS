@@ -1,5 +1,8 @@
 # Installation, Operation, And Rollback
 
+Audience: developers, reviewers, maintainers, and release builders. The public README gives the
+end-user installation overview; this file records the controlled build, module, and rollback flow.
+
 ## Standard APK
 
 Use the `standard` flavor for normal installation:

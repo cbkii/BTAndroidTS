@@ -1,5 +1,8 @@
 # Validation Matrix
 
+Audience: developers, reviewers, maintainers, and AI agents. This file records evidence and
+real-device validation status; it is not an end-user feature list.
+
 No row may be marked passed unless it has exact-device capture evidence. For evidence-only rows,
 `Observed passed` means the captured fact exists on the exact device; it is not a runtime pass for a
 new BTAndroidTS feature.

@@ -1,5 +1,8 @@
 # Safety and Rollback
 
+Audience: developers, reviewers, maintainers, and AI agents. Treat this as the safety boundary for
+implementation and review.
+
 ## Exact-Device Constraints
 
 - Observed: root is Magisk 28.1 with `uid=0` and context `u:r:magisk:s0`, but this does not provide

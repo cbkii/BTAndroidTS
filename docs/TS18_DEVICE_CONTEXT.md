@@ -1,5 +1,8 @@
 # TS18 Device Context
 
+Audience: developers, reviewers, maintainers, and AI agents. This file records exact-device
+evidence and implementation constraints for TS18 work.
+
 This document separates exact-device evidence from broader TS18 precedent and implementation
 assumptions. A pass claim here means the evidence item itself was present in the exact-device
 capture. It does not mean a new BTAndroidTS feature has been run on the head unit.

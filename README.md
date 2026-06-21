@@ -1,88 +1,108 @@
 # BTAndroidTS
 
-BTAndroidTS is a TS18-focused Android Bluetooth peripheral manager derived from the original MIT
-licensed Bluetooth terminal application. The project keeps the useful Classic RFCOMM terminal and
-BLE GATT inspection tools, but the product direction is now a persistent, safe peripheral manager
-for rooted Topway TS18 head units.
+BTAndroidTS is a Bluetooth peripheral manager for Topway TS18 Android head units. It is designed
+to help manage keyboards, remotes, controllers, BLE devices, and Bluetooth file sharing on the
+Android Bluetooth lane while leaving the factory Topway phone and Android Auto lane alone.
 
-The app is intended to manage the Android/Unisoc Bluetooth lane while leaving the separate Topway
-automotive Bluetooth lane in place for phone calls, media, contacts, and projection.
+This app is derived from the original MIT-licensed Bluetooth terminal app. The original licence is
+preserved in [LICENSE](LICENSE).
 
-## Target Runtime
+## Who This App Is For
 
-- Android 10 runtime, API 29 minimum.
-- Primary exact-device target: UIS8581A / SP9863A TS18 family, model `s9863a1h10_Natv`.
-- Rooted deployments should use reversible Magisk modules, not direct system or vendor partition
-  modification.
-- `com.android.bluetooth` remains the Android Bluetooth stack authority.
-- `com.tw.bt` and Topway services remain the automotive phone/projection authority.
+Use BTAndroidTS if you have a TS18 / Topway-style Android head unit and want a safer way to inspect
+or manage Android Bluetooth peripherals without disturbing factory phone, media, contacts, or
+projection features.
 
-See [docs/TS18_DEVICE_CONTEXT.md](docs/TS18_DEVICE_CONTEXT.md) and
-[docs/BLUETOOTH_LANE_MODEL.md](docs/BLUETOOTH_LANE_MODEL.md) for evidence classification and
-the tandem-lane model.
+Primary target:
 
-## Build Variants
+- Topway TS18 / UIS8581A / SP9863A units.
+- Android 10 / API 29 runtime.
+- 1280x720 landscape head-unit screens.
+- Standard APK use first; Magisk privileged install only for tested TS18 workflows.
 
-The project exposes two distribution flavours:
+BTAndroidTS is not a replacement for the factory Bluetooth phone app, Android Auto, ZLink/TLink, or
+Topway services.
 
-- `standard`: normal APK install, no privileged Bluetooth permission.
-- `ts18Privileged`: privileged APK variant intended for systemless Magisk placement. This flavour
-  may request `android.permission.BLUETOOTH_PRIVILEGED` and must remain narrowly scoped.
+## What It Can Do
 
-Both release variants keep package identity `com.cbkii.btandroidts`; debug builds add the existing
-debug suffix. This allows the privileged build to use a matching Android priv-app allowlist without
-changing the application data identity.
+- Show a combined Classic Bluetooth and BLE device inventory.
+- Keep vendor and protected devices separate from Android peripherals.
+- Run bounded Bluetooth scans instead of continuous discovery.
+- Preserve the Topway phone/projection lane for calls, phone audio, contacts, and projection.
+- Keep RFCOMM terminal and BLE GATT tools under Advanced Tools.
+- Accept Android share intents for Bluetooth OPP file sharing and delegate outbound sending to the
+  stock Android Bluetooth service.
+- Export bounded local diagnostics for troubleshooting.
+- Provide a TS18 privileged build shape for Magisk, with a narrow `BLUETOOTH_PRIVILEGED` allowlist.
 
-## Current Capabilities
+## What Still Needs Real TS18 Validation
 
-- Classic Bluetooth discovery and RFCOMM terminal tooling inherited from the upstream app.
-- BLE discovery and GATT inspection inherited from the upstream app.
-- BLE server tools retained as advanced diagnostics.
-- TS18 documentation, safety boundaries, validation matrix, and build-flavour baseline added for
-  the peripheral-manager transformation.
-- Unified Classic/BLE inventory, protected-device policy, persisted supervision policy, finite
-  reconcile service, read-only Topway package inspection, stock OPP delegation, and bounded local
-  diagnostics export are implemented as v1 app behavior.
+Do not treat these as passed until they have been tested on the actual head unit:
 
-The project is in active transformation. Device-level HID Host connection, Android input-node
-creation, OPP destination/progress behavior, ACC sleep/wake, calls, projection, and Magisk
-privileged grants must not be reported as TS18-passed until captured on real hardware.
+- HID Host keyboard, remote, controller, and phone-as-keyboard connection.
+- Android input-node creation and typing.
+- Bluetooth OPP destination picking, progress, cancellation, and receive behavior.
+- Cold boot, activity close, process death, and ACC sleep/wake reconnection.
+- Magisk privileged permission grant and rollback.
+- Calls, phone audio, contacts, and ZLink/TLink/Android Auto coexistence.
 
-## Safety Boundaries
+## Installation
+
+### Standard APK
+
+Install the standard APK first. It is the safest path and does not request privileged Bluetooth
+authority.
+
+```bash
+adb install -r BTAndroidTS-standard-release.apk
+```
+
+Grant the Bluetooth and location permissions Android requests. Android 10/11 can require location
+permission for Bluetooth scanning.
+
+### TS18 Magisk Privileged Variant
+
+Use the Magisk variant only when you have a tested rollback path. The module is systemless and is
+intended to place the APK under `system/priv-app` with only the matching
+`BLUETOOTH_PRIVILEGED` allowlist.
+
+Before installing the module:
+
+- Save current TS18 diagnostics and stock settings.
+- Confirm the module can be disabled from Magisk.
+- Confirm you can recover from a bad boot.
+- Do not replace `Bluetooth.apk`, native Bluetooth libraries, firmware, or Topway apps.
+
+## How To Use
+
+- Open **Phone / Android Auto** to reach the existing Topway phone/projection lane.
+- Use **Keyboards / Peripherals** for Android Bluetooth peripherals.
+- Use **File Sharing** through Android Share; BTAndroidTS delegates to stock Bluetooth OPP.
+- Use **Diagnostics** only when you want a local troubleshooting report.
+- Use **Advanced Tools** for RFCOMM terminal and BLE GATT work.
+
+Connection labels are intentionally explicit: RFCOMM terminal, BLE GATT, HID Host, ACL, and OPP are
+different actions.
+
+## Safety Rules
 
 BTAndroidTS must not:
 
-- replace `Bluetooth.apk`;
-- replace Bluetooth HAL libraries or WCN/controller firmware;
-- edit `/data/misc/bluedroid` directly;
-- clear all bonds;
-- disable Topway services;
-- claim UID 1000, platform signing, or `android.permission.BLUETOOTH_STACK`;
-- start unbounded scans, root commands, or Bluetooth restarts.
+- clear all Bluetooth pairings;
+- replace the Android Bluetooth stack;
+- edit `/data/misc/bluedroid`;
+- disable `com.tw.bt`, `com.tw.service*`, ZLink/TLink, DoFun, SystemUI, MediaProvider, or updater
+  packages;
+- request `BLUETOOTH_STACK`, UID 1000, platform signing, or a system shared UID;
+- repeatedly restart Bluetooth;
+- write to firmware, HAL, MCU, CAN, BOOT, display, or vendor partitions.
 
-See [docs/SAFETY_AND_ROLLBACK.md](docs/SAFETY_AND_ROLLBACK.md) for rollback and STOP conditions.
-See [docs/INSTALLATION_OPERATION_ROLLBACK.md](docs/INSTALLATION_OPERATION_ROLLBACK.md) for
-installation and operation guidance, and [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)
-for current task completeness.
+## More Information
 
-## Building
+Developer, reviewer, and AI-agent guidance lives outside this end-user README:
 
-```bash
-./gradlew testStandardDebugUnitTest
-./gradlew lintStandardDebug
-./gradlew assembleStandardDebug
-./gradlew assembleStandardRelease
-./gradlew assembleTs18PrivilegedDebug
-./gradlew assembleTs18PrivilegedRelease
-sh scripts/check-manifest-permissions.sh
-sh scripts/package-magisk.sh
-sh scripts/validate-magisk-package.sh
-```
-
-Release builds run R8. Reflection-dependent Bluetooth code must use narrow keep rules only.
-
-## Upstream Attribution
-
-This repository is derived from the original Bluetooth terminal application by Tuuhin. The original
-MIT licence is preserved in [LICENSE](LICENSE). Useful upstream debugging features are retained
-under Advanced Tools rather than removed.
+- [AGENTS.md](AGENTS.md)
+- [docs/TS18_DEVICE_CONTEXT.md](docs/TS18_DEVICE_CONTEXT.md)
+- [docs/BLUETOOTH_LANE_MODEL.md](docs/BLUETOOTH_LANE_MODEL.md)
+- [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md)
+- [docs/INSTALLATION_OPERATION_ROLLBACK.md](docs/INSTALLATION_OPERATION_ROLLBACK.md)

@@ -1,72 +1,65 @@
-# Contributing to BTAndroidApp
+# Contributing to BTAndroidTS
 
-Contributions are welcome to `BTAndroidApp` project!
-Your help is invaluable in making this app better for everyone. To ensure a smooth and effective
-collaboration, please follow these guidelines carefully.
+BTAndroidTS is a TS18-focused Android Bluetooth peripheral manager. Contributions are welcome, but
+changes must preserve the safety boundaries documented in [AGENTS.md](AGENTS.md) and `docs/`.
 
----
+## Contribution Workflow
 
-## Our Contribution Workflow
+1. Open an issue before starting substantial work.
+2. Describe the exact TS18 behavior, evidence, or bug being addressed.
+3. Wait for agreement on the approach when the change affects Bluetooth, root, Magisk, Topway
+   packages, storage, diagnostics, or recovery.
+4. Work on a topic branch from the current target branch.
+5. Keep pull requests focused and include validation results.
 
-To maintain project quality and coordination, we follow a specific workflow for contributions:
+## Development Environment
 
-1. **Open an Issue First:**
-    * Before starting any work, please **always open an issue** to discuss the bug, feature, or
-      change you intend to work on.
-    * This step is crucial for ensuring that the work aligns with project goals and avoids duplicate
-      efforts.
+Use an Android/Linux shell environment for commands and scripts. Keep project documentation scoped
+to Android/Linux shell workflows.
 
-2. **Discuss the Issue:**
-    * We will discuss the issue with you to clarify requirements, approach, and feasibility.
-    * Please participate actively in the discussion on the issue tracker.
+Required tooling:
 
-3. **Wait for Approval to Work:**
-    * Only after we have discussed the issue and explicitly ask you to proceed with implementing
-      a solution, should you start coding.
-    * This ensures that your valuable time is spent on features or fixes that the project needs and
-      approves.
+- JDK 17.
+- Android SDK matching the project compile SDK.
+- Android build tools.
+- POSIX shell utilities for `scripts/*.sh`.
 
-4. **Create a Dedicated Branch:**
-    * Once approved to work, please create a new branch from `main` using one of the following
-      conventions:
-        * For new features: `feat/<descriptive_feature_name>`
-        * For bug fixes: `bug/<bug-decription>`
+Recommended validation:
 
----
+```bash
+./gradlew testStandardDebugUnitTest
+./gradlew lintStandardDebug
+./gradlew assembleStandardDebug
+./gradlew assembleStandardRelease
+./gradlew assembleTs18PrivilegedRelease
+sh scripts/check-manifest-permissions.sh
+sh scripts/package-magisk.sh
+sh scripts/validate-magisk-package.sh
+```
 
-## General Guidelines
+Do not claim a command passed unless it was run successfully.
 
-- **Code of Conduct:** Please review and adhere to our [Code of Conduct](CODE_OF_CONDUCT.md) in all
-  your interactions within this project.
-- **Pull Requests:**
-    - When submitting your code, please
-      use [Pull Request Template](/.github/PULL_REQUEST_TEMPLATE.md) and fill it out completely.
-    - Link your pull request to the issue you worked on (e.g., `Closes #123`).
-    - Be prepared for constructive feedback during the review process.
+## Pull Request Requirements
 
-## Setting up the Development Environment
+- Preserve package identity `com.cbkii.btandroidts`.
+- Preserve the MIT licence and upstream attribution.
+- Keep Android Bluetooth APIs out of ViewModels.
+- Use domain interfaces and Android-specific `data/` implementations.
+- Keep hidden or reflected APIs behind narrow adapters.
+- Add or update tests for policy, lifecycle, Bluetooth behavior, OPP, diagnostics, or validation
+  logic when touched.
+- Update [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) and
+  [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md) when behavior or evidence changes.
 
-If you're unsure how to get the project running locally, here are the basic steps:
+## TS18 Claims
 
-1. **Prerequisites:**
-    * Java Development Kit (JDK) 17 or higher.
-    * Android Studio (latest stable version recommended).
-    * Android SDK Platform 34 (or the target API level of the app).
+Use the project evidence labels:
 
-2. **Clone the repository:**
-   ```bash
-   git clone https://github.com/tuuhin/BTAndroidApp.git
-   cd BTAndroidApp
-   ```
+- Observed
+- Inferred
+- Hypothesis
+- Requires device validation
+- Unsupported
 
-3. **Open in Android Studio:**
-   Open the cloned project in Android Studio. Android Studio should guide you through syncing Gradle
-   files and downloading dependencies.
-
-4. **Build and Run:**
-   Ensure the project builds successfully (`./gradlew assembleDebug`) and runs on an emulator or
-   physical device.
-
----
-
-Thank you for your understanding and for contributing to the `BTAndroidApp`!
+Only mark real-device behavior as passed when exact TS18 evidence exists. Emulator, local build, or
+static analysis success is not TS18 runtime proof.
