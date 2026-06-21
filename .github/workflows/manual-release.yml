@@ -238,6 +238,13 @@ jobs:
           if name_count != 1 or code_count != 1:
               raise SystemExit(f'Expected one versionName/versionCode replacement; got versionName={name_count}, versionCode={code_count}.')
           path.write_text(text, encoding='utf-8', newline='\n')
+
+          prop_path = Path('magisk/BTAndroidTS/module.prop')
+          if prop_path.exists():
+              prop_text = prop_path.read_text(encoding='utf-8')
+              prop_text = re.sub(r'version=.*', f'version={version_name}', prop_text)
+              prop_text = re.sub(r'versionCode=.*', f'versionCode={version_code}', prop_text)
+              prop_path.write_text(prop_text, encoding='utf-8', newline='\n')
           PY
 
       - name: Commit release version metadata locally
