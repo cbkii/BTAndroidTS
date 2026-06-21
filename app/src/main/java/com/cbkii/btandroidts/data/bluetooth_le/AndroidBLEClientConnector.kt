@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
-import android.bluetooth.BluetoothGattConnectionSettings
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothStatusCodes
@@ -35,7 +34,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,28 +96,13 @@ class AndroidBLEClientConnector(
 			_connectedDevice = device.toDomainModel()
 
 			// connect to the gatt server
-			_bLEGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN) {
-				val settings = BluetoothGattConnectionSettings.Builder()
-					.setTransport(BluetoothDevice.TRANSPORT_LE)
-					.setAutoConnectEnabled(autoConnect)
-					.setOpportunisticEnabled(false)
-					.build()
-
-				// we can have a dedicated executor for the connected client
-				val ioDispatcher = Dispatchers.IO
-					.limitedParallelism(2, "bluetooth_connector_dispatcher")
-					.asExecutor()
-
-				device.connectGatt(settings, ioDispatcher, _gattCallback)
-			} else {
-				@Suppress("DEPRECATION")
-				device.connectGatt(
-					context,
-					autoConnect,
-					_gattCallback,
-					BluetoothDevice.TRANSPORT_LE
-				)
-			}
+			@Suppress("DEPRECATION")
+			_bLEGatt = device.connectGatt(
+				context,
+				autoConnect,
+				_gattCallback,
+				BluetoothDevice.TRANSPORT_LE
+			)
 
 			Log.d(TAG, "CONNECT GATT")
 			// load all files

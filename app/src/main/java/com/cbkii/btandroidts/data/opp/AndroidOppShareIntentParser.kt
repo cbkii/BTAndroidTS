@@ -10,11 +10,11 @@ class AndroidOppShareIntentParser {
 	@Suppress("DEPRECATION")
 	fun parse(intent: Intent): Result<OppShareRequest> = runCatching {
 		val mimeType = intent.type
-		val items = when (intent.action) {
+		val items: List<OppShareItem> = when (intent.action) {
 			Intent.ACTION_SEND -> {
 				val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
 				val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
-				buildList {
+				buildList<OppShareItem> {
 					if (uri != null) add(OppShareItem(uri = uri, mimeType = mimeType))
 					if (uri == null && !text.isNullOrBlank()) {
 						add(OppShareItem(text = text, mimeType = mimeType ?: "text/plain"))

@@ -8,7 +8,8 @@ import com.cbkii.btandroidts.domain.peripheral.InputDeviceRepository
 class AndroidInputDeviceRepository : InputDeviceRepository {
 	override fun listInputDevices(): List<AndroidInputDeviceInfo> =
 		InputDevice.getDeviceIds()
-			.mapNotNull(InputDevice::getDevice)
+			.asSequence()
+			.mapNotNull { id -> InputDevice.getDevice(id) }
 			.map { device ->
 				AndroidInputDeviceInfo(
 					id = device.id,
@@ -19,6 +20,7 @@ class AndroidInputDeviceRepository : InputDeviceRepository {
 					sources = device.sources,
 				)
 			}
+			.toList()
 
 	override fun hasInputDeviceFor(address: BluetoothAddress): Boolean {
 		val compact = address.value.replace(":", "")
