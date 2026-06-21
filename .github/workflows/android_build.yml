@@ -29,12 +29,12 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK API 37 preview
+      - name: Install Android SDK API 36
         env:
-          ANDROID_COMPILE_SDK: "37"
+          ANDROID_COMPILE_SDK: "36"
         run: |
           yes | sdkmanager --licenses
-          sdkmanager --channel=3 "platform-tools" "platforms;android-${ANDROID_COMPILE_SDK}"
+          sdkmanager "platform-tools" "platforms;android-${ANDROID_COMPILE_SDK}"
 
       - name: Unit tests
         run: ./gradlew testStandardDebugUnitTest --stacktrace

@@ -1,8 +1,8 @@
 [versions]
 agp = "9.2.0"
 android-minsdk = "29"
-android-compilesdk = "37"
-android-targetsdk = "37"
+android-compilesdk = "36"
+android-targetsdk = "36"
 compose_destination_core_version = "2.3.0"
 coreSplashscreen = "1.2.0"
 datastore = "1.2.1"
