@@ -270,6 +270,7 @@ jobs:
         run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:assembleStandardRelease :app:assembleTs18PrivilegedRelease
 
       - name: Package and validate Magisk module
+        id: package_magisk
         shell: bash
         run: |
           set -euo pipefail
@@ -279,9 +280,10 @@ jobs:
             printf 'Candidate: %s\n' "${apk_candidates[@]}"
             exit 1
           fi
-          sh scripts/package-magisk.sh "${apk_candidates[0]}"
-          sh scripts/validate-magisk-package.sh
-          unzip -t build/BTAndroidTS-magisk.zip >/dev/null
+          # scripts/package-magisk.sh now calls validation internally
+          sh scripts/package-magisk.sh "${apk_candidates[0]}" "release"
+          unzip -t build/BTAndroidTS-release-magisk.zip >/dev/null
+          echo "magisk_zip=build/BTAndroidTS-release-magisk.zip" >> "$GITHUB_OUTPUT"
 
       - name: Locate, verify, and rename release artifacts
         id: artifacts
@@ -322,7 +324,7 @@ jobs:
           done
           magisk_name="BTAndroidTS-${RELEASE_TAG}-magisk.zip"
           magisk_path="${RUNNER_TEMP}/${magisk_name}"
-          cp build/BTAndroidTS-magisk.zip "${magisk_path}"
+          cp "${{ steps.package_magisk.outputs.magisk_zip }}" "${magisk_path}"
           unzip -t "${magisk_path}" >/dev/null
           asset_paths+=("${magisk_path}")
           asset_names_out+=("${magisk_name}")
@@ -618,6 +620,17 @@ jobs:
             echo "## Unique warnings/errors/failures"
             echo
             write_findings
+            echo
+            echo "## Checks run"
+            echo
+            echo "- Unit tests: \`:app:testStandardDebugUnitTest\`"
+            echo "- Android lint: \`:app:lintStandardDebug\`"
+            echo "- Manifest permission split check"
+            echo "- Release APK builds: \`:app:assembleStandardRelease\`, \`:app:assembleTs18PrivilegedRelease\`"
+            echo "- APK signature verification: \`apksigner verify\`"
+            echo "- Magisk v28.1+ module structure (with recovery support)"
+            echo "- Release Magisk module packaging and validation"
+            echo "- Magisk module safety validation (strict permissions and directives)"
             echo
             echo "## Logs"
             echo

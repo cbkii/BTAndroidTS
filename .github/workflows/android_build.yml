@@ -133,6 +133,7 @@ jobs:
         run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:assembleStandardDebug :app:assembleTs18PrivilegedDebug
 
       - name: Package debug Magisk module
+        id: package_magisk
         shell: bash
         run: |
           set -euo pipefail
@@ -143,11 +144,9 @@ jobs:
             echo "::error::No TS18 privileged debug APK found."
             exit 1
           fi
-          # Use the latest built APK
-          sh scripts/package-magisk.sh "${apk_candidates[-1]}"
-
-      - name: Validate Magisk package
-        run: sh scripts/validate-magisk-package.sh
+          # Use the latest built APK. scripts/package-magisk.sh now calls validation internally.
+          sh scripts/package-magisk.sh "${apk_candidates[-1]}" "debug-ci"
+          echo "magisk_zip=build/BTAndroidTS-debug-ci-magisk.zip" >> "$GITHUB_OUTPUT"
 
       - name: Upload build reports
         id: build_reports_artifact
@@ -180,7 +179,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: btandroidts-debug-magisk-module
-          path: build/BTAndroidTS-magisk.zip
+          path: ${{ steps.package_magisk.outputs.magisk_zip }}
           if-no-files-found: error
           retention-days: 7
 
@@ -244,7 +243,9 @@ jobs:
             echo "- Android lint: \`:app:lintStandardDebug\`"
             echo "- Manifest permission split check"
             echo "- Debug APK builds: \`:app:assembleStandardDebug\`, \`:app:assembleTs18PrivilegedDebug\`"
-            echo "- Debug Magisk module packaging and validation"
+            echo "- Magisk v28.1+ module structure (with recovery support)"
+            echo "- Debug Magisk module packaging with dynamic allowlist patching"
+            echo "- Magisk module safety validation (strict permissions and directives)"
             echo
             echo "## Artifacts"
             echo
