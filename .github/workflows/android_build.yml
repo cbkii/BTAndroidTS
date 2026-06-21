@@ -1,26 +1,6 @@
 name: Android Build CI
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-      - feat/ts18-peripheral-manager
-    paths:
-      - '.github/workflows/**'
-      - 'app/**'
-      - 'build.gradle'
-      - 'build.gradle.kts'
-      - 'settings.gradle'
-      - 'settings.gradle.kts'
-      - 'gradle/**'
-      - 'gradle.properties'
-      - 'gradlew'
-      - 'gradlew.bat'
-      - 'scripts/**'
-      - 'magisk/**'
-      - 'README.md'
-      - 'docs/**'
   pull_request:
     branches:
       - main
@@ -39,6 +19,13 @@ on:
       - 'magisk/**'
       - 'README.md'
       - 'docs/**'
+  workflow_call:
+    inputs:
+      upload_artifacts:
+        description: Upload debug APK and Magisk ZIP artifacts
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   actions: read
@@ -51,12 +38,17 @@ concurrency:
 
 jobs:
   android:
+    name: Android PR build
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
 
     env:
+      JAVA_VERSION: "21"
+      JAVA_DISTRIBUTION: temurin
       ANDROID_COMPILE_SDK: "37"
+      ANDROID_MIN_SDK: "29"
       ANDROID_BUILD_TOOLS: "36.0.0"
+      REQUIRES_NINJA: "true"
 
     steps:
       - name: Checkout repository
@@ -66,27 +58,16 @@ jobs:
           submodules: false
           persist-credentials: false
 
-      - name: Set up JDK 21
+      - name: Set up JDK
         uses: actions/setup-java@v5
         with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Write local.properties for Android SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-          sdk_dir="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
-          if [[ -z "${sdk_dir}" ]]; then
-            echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
-            exit 1
-          fi
-          printf 'sdk.dir=%s\n' "${sdk_dir}" > local.properties
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
         with:
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
+          cache-read-only: true
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
@@ -101,6 +82,7 @@ jobs:
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "platforms;android-${ANDROID_COMPILE_SDK}"
           echo "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
+          printf 'sdk.dir=%s\n' "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}" > local.properties
 
       - name: Verify Android SDK tooling
         shell: bash
@@ -109,7 +91,6 @@ jobs:
           sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           echo "ANDROID_HOME=${ANDROID_HOME:-}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
-          which sdkmanager || true
           sdkmanager --list_installed || true
           test -d "${sdk_root}/platforms/android-${ANDROID_COMPILE_SDK}"
           test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
@@ -120,7 +101,9 @@ jobs:
         run: |
           set -euo pipefail
           packages=()
-          command -v ninja >/dev/null 2>&1 || packages+=("ninja-build")
+          if [[ "${REQUIRES_NINJA}" == "true" ]] && ! command -v ninja >/dev/null 2>&1; then
+            packages+=("ninja-build")
+          fi
           command -v zip >/dev/null 2>&1 || packages+=("zip")
           if (( ${#packages[@]} > 0 )); then
             sudo apt-get update
@@ -130,38 +113,25 @@ jobs:
       - name: Unit tests
         run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:testStandardDebugUnitTest
 
-      - name: Lint
+      - name: Android lint
         run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:lintStandardDebug
 
       - name: Manifest permission checks
         run: sh scripts/check-manifest-permissions.sh
 
-      - name: Assemble debug APKs
+      - name: Build debug APKs
         run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:assembleStandardDebug :app:assembleTs18PrivilegedDebug
 
-      - name: Assemble release APKs
-        if: github.event_name != 'pull_request'
-        run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:assembleStandardRelease :app:assembleTs18PrivilegedRelease
-
-      - name: Package Magisk module
+      - name: Package debug Magisk module
         shell: bash
         run: |
           set -euo pipefail
-
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            apk_dir="app/build/outputs/apk/ts18Privileged/debug"
-          else
-            apk_dir="app/build/outputs/apk/ts18Privileged/release"
-          fi
-
-          mapfile -t apk_candidates < <(find "${apk_dir}" -maxdepth 1 -type f -name "*.apk" | sort)
-
+          mapfile -t apk_candidates < <(find app/build/outputs/apk/ts18Privileged/debug -maxdepth 1 -type f -name '*.apk' | sort)
           if (( ${#apk_candidates[@]} != 1 )); then
-            echo "::error::Expected exactly one TS18 privileged APK in ${apk_dir}; found ${#apk_candidates[@]}."
-            printf 'Candidate: %s\n' "${apk_candidates[@]:-}" >&2
+            echo "::error::Expected exactly one TS18 privileged debug APK; found ${#apk_candidates[@]}."
+            printf 'Candidate: %s\n' "${apk_candidates[@]}"
             exit 1
           fi
-
           sh scripts/package-magisk.sh "${apk_candidates[0]}"
 
       - name: Validate Magisk package
@@ -172,212 +142,58 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: btandroidts-build-reports
+          name: btandroidts-pr-build-reports
           path: |
             app/build/reports/**
             build/reports/problems/**
+            app/build/outputs/logs/**
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload build diagnostics
-        id: build_diagnostics_artifact
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: btandroidts-build-diagnostics
-          path: |
-            build/reports/problems/**
-            app/build/outputs/logs/**
-          if-no-files-found: ignore
-          retention-days: 3
-
-      - name: Upload debug APK artifact
+      - name: Upload debug APKs
         id: debug_apks_artifact
-        if: success()
+        if: success() && inputs.upload_artifacts != false
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: btandroidts-debug-apks
           path: |
-            ./app/build/outputs/apk/standard/debug/*.apk
-            ./app/build/outputs/apk/ts18Privileged/debug/*.apk
+            app/build/outputs/apk/standard/debug/*.apk
+            app/build/outputs/apk/ts18Privileged/debug/*.apk
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload release APK artifact
-        id: release_apks_artifact
-        if: success() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: btandroidts-release-apks
-          path: |
-            ./app/build/outputs/apk/standard/release/*.apk
-            ./app/build/outputs/apk/ts18Privileged/release/*.apk
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload Magisk module artifact
+      - name: Upload debug Magisk module
         id: magisk_module_artifact
-        if: success()
+        if: success() && inputs.upload_artifacts != false
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: btandroidts-magisk-module
-          path: |
-            ./build/BTAndroidTS-magisk.zip
+          name: btandroidts-debug-magisk-module
+          path: build/BTAndroidTS-magisk.zip
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
       - name: Write Android build summary
-        if: ${{ always() }}
+        if: always()
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
           JOB_STATUS: ${{ job.status }}
           BUILD_REPORTS_ARTIFACT_URL: ${{ steps.build_reports_artifact.outputs.artifact-url }}
-          BUILD_DIAGNOSTICS_ARTIFACT_URL: ${{ steps.build_diagnostics_artifact.outputs.artifact-url }}
           DEBUG_APKS_ARTIFACT_URL: ${{ steps.debug_apks_artifact.outputs.artifact-url }}
-          RELEASE_APKS_ARTIFACT_URL: ${{ steps.release_apks_artifact.outputs.artifact-url }}
           MAGISK_MODULE_ARTIFACT_URL: ${{ steps.magisk_module_artifact.outputs.artifact-url }}
         run: |
-          set -u
-          set -o pipefail
-
+          set -euo pipefail
           repo_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
           run_url="${repo_url}/actions/runs/${GITHUB_RUN_ID}"
 
           case "${JOB_STATUS}" in
-            success)
-              result_message="✅ BTAndroidTS Android Build completed successfully."
-              ;;
-            failure)
-              result_message="❌ BTAndroidTS Android Build failed. Inspect the findings, downloadable diagnostics, and linked run logs below."
-              ;;
-            cancelled)
-              result_message="⚠️ BTAndroidTS Android Build was cancelled before completion."
-              ;;
-            *)
-              result_message="⚠️ BTAndroidTS Android Build finished with status: ${JOB_STATUS}."
-              ;;
+            success) result_message="✅ BTAndroidTS Android PR build completed successfully." ;;
+            failure) result_message="❌ BTAndroidTS Android PR build failed." ;;
+            cancelled) result_message="⚠️ BTAndroidTS Android PR build was cancelled." ;;
+            *) result_message="⚠️ BTAndroidTS Android PR build finished with status: ${JOB_STATUS}." ;;
           esac
 
-          write_artifact_links() {
-            local artifacts_json
-            local name
-            local artifact_id
-            local expires_at
-            local emitted_count=0
-
-            declare -A emitted_names=()
-
-            emit_known_artifact() {
-              local artifact_name="$1"
-              local artifact_url="$2"
-
-              if [[ -n "${artifact_url}" ]]; then
-                echo "- [${artifact_name}](${artifact_url})"
-                emitted_names["${artifact_name}"]=1
-                emitted_count=$((emitted_count + 1))
-              fi
-            }
-
-            emit_known_artifact "btandroidts-build-reports" "${BUILD_REPORTS_ARTIFACT_URL:-}"
-            emit_known_artifact "btandroidts-build-diagnostics" "${BUILD_DIAGNOSTICS_ARTIFACT_URL:-}"
-            emit_known_artifact "btandroidts-debug-apks" "${DEBUG_APKS_ARTIFACT_URL:-}"
-            emit_known_artifact "btandroidts-release-apks" "${RELEASE_APKS_ARTIFACT_URL:-}"
-            emit_known_artifact "btandroidts-magisk-module" "${MAGISK_MODULE_ARTIFACT_URL:-}"
-
-            if artifacts_json="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" 2>/dev/null)"; then
-              while IFS=$'\t' read -r name artifact_id expires_at; do
-                [[ -z "${name}" || -z "${artifact_id}" ]] && continue
-                [[ -n "${emitted_names[$name]+present}" ]] && continue
-
-                echo "- [${name}](${run_url}/artifacts/${artifact_id}) — expires ${expires_at}"
-                emitted_names["${name}"]=1
-                emitted_count=$((emitted_count + 1))
-              done < <(
-                jq -r '
-                  .artifacts
-                  | map(select((.expired // false) | not))
-                  | unique_by(.id)
-                  | sort_by(.name)[]
-                  | [.name, (.id | tostring), (.expires_at // "unknown")]
-                  | @tsv
-                ' <<< "${artifacts_json}" 2>/dev/null
-              )
-            fi
-
-            if (( emitted_count == 0 )); then
-              echo "- No downloadable artifacts were produced."
-              echo "- [Open this workflow run to inspect logs](${run_url})"
-            fi
-          }
-
-          write_unique_findings() {
-            local jobs_json
-            local check_runs_json
-            local findings_file
-            local annotations_file
-            local final_file
-
-            jobs_json="$(mktemp)"
-            check_runs_json="$(mktemp)"
-            findings_file="$(mktemp)"
-            annotations_file="$(mktemp)"
-            final_file="$(mktemp)"
-
-            if gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" > "${jobs_json}" 2>/dev/null; then
-              jq -r '
-                .jobs[]?
-                | select((.conclusion // "") | IN("failure", "cancelled", "timed_out", "action_required"))
-                | "- **Job " + (.conclusion // "unknown") + "** — " + (.name // "unnamed job")
-              ' "${jobs_json}" >> "${findings_file}" 2>/dev/null || true
-
-              jq -r '
-                .jobs[]? as $job
-                | $job.steps[]?
-                | select((.conclusion // "") | IN("failure", "cancelled"))
-                | "- **Step " + (.conclusion // "unknown") + "** — " + ($job.name // "unnamed job") + " / " + (.name // "unnamed step")
-              ' "${jobs_json}" >> "${findings_file}" 2>/dev/null || true
-            fi
-
-            if gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100" > "${check_runs_json}" 2>/dev/null; then
-              jq -r --arg run_id "${GITHUB_RUN_ID}" '
-                .check_runs[]?
-                | select((.details_url // "") | contains("/actions/runs/" + $run_id + "/"))
-                | .id
-              ' "${check_runs_json}" 2>/dev/null |
-                while IFS= read -r check_run_id; do
-                  [[ -z "${check_run_id}" ]] && continue
-
-                  gh api -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/check-runs/${check_run_id}/annotations" --paginate 2>/dev/null |
-                    jq -r '
-                      .[]?
-                      | select((.annotation_level // "") | IN("warning", "failure"))
-                      | "- **" + (.annotation_level // "notice") + "** — "
-                          + ((.path // "workflow") + (if .start_line then ":" + (.start_line | tostring) else "" end))
-                          + " — " + (.message // .title // "")
-                    ' >> "${annotations_file}" 2>/dev/null || true
-                done
-            fi
-
-            cat "${findings_file}" "${annotations_file}" |
-              sed -E 's/[[:space:]]+$//' |
-              awk 'NF && !seen[$0]++' > "${final_file}"
-
-            if [[ -s "${final_file}" ]]; then
-              cat "${final_file}"
-            elif [[ "${JOB_STATUS}" == "success" ]]; then
-              echo "- No warning, failure, cancellation, or timeout findings were exposed through the Actions jobs or check-annotations APIs."
-            else
-              echo "- No detailed findings were available through the Actions APIs at summary time."
-              echo "- [Open the complete workflow logs](${run_url})"
-            fi
-
-            rm -f "${jobs_json}" "${check_runs_json}" "${findings_file}" "${annotations_file}" "${final_file}"
-          }
-
           {
-            echo "# BTAndroidTS Android Build"
+            echo "# BTAndroidTS Android PR build"
             echo
             echo "${result_message}"
             echo
@@ -388,30 +204,34 @@ jobs:
             echo "- Commit: [\`${GITHUB_SHA}\`](${repo_url}/commit/${GITHUB_SHA})"
             echo "- Workflow run: [${GITHUB_RUN_ID}](${run_url})"
             echo
-            echo "## Build scope"
+            echo "## Checks run"
             echo
-            echo "- Standard debug APK"
-            echo "- TS18 privileged debug APK"
-            echo "- Magisk module package using the TS18 privileged APK"
-
-            if [[ "${GITHUB_EVENT_NAME}" != "pull_request" ]]; then
-              echo "- Standard and TS18 privileged release APK builds"
-            else
-              echo "- Release APK builds skipped for pull-request validation"
+            echo "- Unit tests: \`:app:testStandardDebugUnitTest\`"
+            echo "- Android lint: \`:app:lintStandardDebug\`"
+            echo "- Manifest permission split check"
+            echo "- Debug APK builds: \`:app:assembleStandardDebug\`, \`:app:assembleTs18PrivilegedDebug\`"
+            echo "- Debug Magisk module packaging and validation"
+            echo
+            echo "## Artifacts"
+            echo
+            artifact_count=0
+            if [[ -n "${BUILD_REPORTS_ARTIFACT_URL:-}" ]]; then
+              echo "- [Build reports](${BUILD_REPORTS_ARTIFACT_URL})"
+              artifact_count=$((artifact_count + 1))
             fi
-
-            echo
-            echo "## Downloadable artifacts"
-            echo
-            write_artifact_links
-
-            echo
-            echo "## Unique warnings/errors/failures"
-            echo
-            write_unique_findings
-
+            if [[ -n "${DEBUG_APKS_ARTIFACT_URL:-}" ]]; then
+              echo "- [Debug APKs](${DEBUG_APKS_ARTIFACT_URL})"
+              artifact_count=$((artifact_count + 1))
+            fi
+            if [[ -n "${MAGISK_MODULE_ARTIFACT_URL:-}" ]]; then
+              echo "- [Debug Magisk module](${MAGISK_MODULE_ARTIFACT_URL})"
+              artifact_count=$((artifact_count + 1))
+            fi
+            if (( artifact_count == 0 )); then
+              echo "- No artifacts were uploaded for this run."
+            fi
             echo
             echo "## Logs"
             echo
-            echo "- [Open the complete BTAndroidTS Android Build run](${run_url})"
+            echo "- [Open workflow run](${run_url})"
           } >> "$GITHUB_STEP_SUMMARY"
