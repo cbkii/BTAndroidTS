@@ -33,7 +33,6 @@ jobs:
         env:
           ANDROID_COMPILE_SDK: "36"
         run: |
-          yes | sdkmanager --licenses
           sdkmanager "platform-tools" "platforms;android-${ANDROID_COMPILE_SDK}"
 
       - name: Unit tests
