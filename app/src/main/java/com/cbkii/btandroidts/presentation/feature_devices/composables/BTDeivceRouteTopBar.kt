@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.presentation.contracts.StartBluetoothDiscovery
@@ -38,13 +39,14 @@ fun BTDeviceRouteTopBar(
 	scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
 	val context = LocalContext.current
+	val resources = LocalResources.current
 
 	val launcher = rememberLauncherForActivityResult(
 		contract = StartBluetoothDiscovery(),
 		onResult = { result ->
 			val message = when (result) {
-				Activity.RESULT_CANCELED -> context.getString(R.string.device_discoverable_denied)
-				else -> context.getString(R.string.device_discoverable_success, result)
+				Activity.RESULT_CANCELED -> resources.getString(R.string.device_discoverable_denied)
+				else -> resources.getString(R.string.device_discoverable_success, result)
 			}
 			Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 		},

@@ -6,6 +6,7 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.domain.bluetooth.enums.ClientConnectionState
 import com.cbkii.btandroidts.domain.bluetooth.enums.ServerConnectionState
@@ -19,6 +20,7 @@ fun KeepScreenOnSideEffect(
 
 	val context = LocalContext.current
 	val activity = LocalActivity.current
+	val keepScreenOnMessage = stringResource(R.string.toast_screen_will_be_on)
 
 	DisposableEffect(connectionState) {
 		// otherwise
@@ -34,8 +36,7 @@ fun KeepScreenOnSideEffect(
 				WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
 
 		if (hasFlag) {
-			val message = context.getString(R.string.toast_screen_will_be_on)
-			Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+			Toast.makeText(context, keepScreenOnMessage, Toast.LENGTH_SHORT).show()
 		}
 
 		onDispose {
@@ -55,6 +56,7 @@ fun KeepScreenOnSideEffect(
 
 	val context = LocalContext.current
 	val activity = LocalActivity.current
+	val keepScreenOnMessage = stringResource(R.string.toast_screen_will_be_on)
 
 	DisposableEffect(connectionState) {
 		// otherwise
@@ -70,8 +72,7 @@ fun KeepScreenOnSideEffect(
 				WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
 
 		if (hasFlag) {
-			val message = context.getString(R.string.toast_screen_will_be_on)
-			Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+			Toast.makeText(context, keepScreenOnMessage, Toast.LENGTH_SHORT).show()
 		}
 
 		onDispose {
