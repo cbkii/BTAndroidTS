@@ -4,16 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       version_tag:
-        description: "Release tag, e.g. v18.0.1. Leave blank to auto-increment patch."
+        description: 'Release tag, e.g. v18.0.1. Leave blank to auto-increment patch.'
         required: false
         type: string
       draft:
-        description: "Create release as draft"
+        description: 'Create release as draft'
         required: true
         default: true
         type: boolean
       prerelease:
-        description: "Mark release as prerelease"
+        description: 'Mark release as prerelease'
         required: true
         default: false
         type: boolean
@@ -35,12 +35,12 @@ jobs:
     timeout-minutes: 90
 
     env:
-      JAVA_VERSION: "21"
+      JAVA_VERSION: '21'
       JAVA_DISTRIBUTION: temurin
-      ANDROID_COMPILE_SDK: "37"
-      ANDROID_MIN_SDK: "29"
-      ANDROID_BUILD_TOOLS: "36.0.0"
-      REQUIRES_NINJA: "true"
+      ANDROID_COMPILE_SDK: '36'
+      ANDROID_MIN_SDK: '29'
+      ANDROID_BUILD_TOOLS: '36.0.0'
+      REQUIRES_NINJA: 'true'
 
     steps:
       - name: Checkout repository
@@ -51,7 +51,7 @@ jobs:
           submodules: false
           persist-credentials: true
 
-      - name: Verify branch release context
+      - name: Validate release context and workflow syntax
         shell: bash
         run: |
           set -euo pipefail
@@ -75,6 +75,8 @@ jobs:
             echo "::error::Remote head: ${remote_head}"
             exit 1
           fi
+          ruby -e 'require "yaml"; ARGV.each { |f| Psych.safe_load(File.read(f), permitted_classes: [], permitted_symbols: [], aliases: false); puts "OK #{f}" }' .github/workflows/*.yml
+          find scripts -type f -name '*.sh' -print -exec bash -n {} \;
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -87,37 +89,28 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
-
-      - name: Install required Android SDK components
-        shell: bash
-        run: |
-          set -euo pipefail
-          set +e
-          yes 2>/dev/null | sdkmanager --licenses >/dev/null
-          sdkmanager_license_status="${PIPESTATUS[1]}"
-          set -e
-          if [[ "${sdkmanager_license_status}" -ne 0 ]]; then
-            echo "::error::sdkmanager --licenses failed with exit code ${sdkmanager_license_status}."
-            exit "${sdkmanager_license_status}"
-          fi
-          sdkmanager --channel=3 --install \
-            "platform-tools" \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "platforms;android-${ANDROID_COMPILE_SDK}"
-          echo "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
-          printf 'sdk.dir=%s\n' "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}" > local.properties
+        with:
+          packages: |
+            platform-tools
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
 
       - name: Verify Android SDK tooling
         shell: bash
         run: |
           set -euo pipefail
           sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
+            exit 1
+          fi
+          printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
           echo "ANDROID_HOME=${ANDROID_HOME:-}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
-          sdkmanager --list_installed || true
           test -d "${sdk_root}/platforms/android-${ANDROID_COMPILE_SDK}"
           test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
           test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
+          echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
 
       - name: Ensure native build tools are present
         shell: bash
@@ -133,6 +126,9 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y "${packages[@]}"
           fi
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
 
       - name: Compute release version and check collisions
         id: version
@@ -193,7 +189,6 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Configure release signing
-        id: signing
         shell: bash
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -237,15 +232,15 @@ jobs:
           from pathlib import Path
           import os
           import re
-          path = Path("app/build.gradle.kts")
-          text = path.read_text(encoding="utf-8")
-          version_name = os.environ["RELEASE_VERSION_NAME"]
-          version_code = os.environ["RELEASE_VERSION_CODE"]
+          path = Path('app/build.gradle.kts')
+          text = path.read_text(encoding='utf-8')
+          version_name = os.environ['RELEASE_VERSION_NAME']
+          version_code = os.environ['RELEASE_VERSION_CODE']
           text, name_count = re.subn(r'(versionName\s*=\s*)"[^"]+"', rf'\1"{version_name}"', text, count=1)
           text, code_count = re.subn(r'(versionCode\s*=\s*)\d+', rf'\g<1>{version_code}', text, count=1)
           if name_count != 1 or code_count != 1:
-              raise SystemExit(f"Expected one versionName/versionCode replacement; got versionName={name_count}, versionCode={code_count}.")
-          path.write_text(text, encoding="utf-8", newline="\n")
+              raise SystemExit(f'Expected one versionName/versionCode replacement; got versionName={name_count}, versionCode={code_count}.')
+          path.write_text(text, encoding='utf-8', newline='\n')
           PY
 
       - name: Commit release version metadata locally
