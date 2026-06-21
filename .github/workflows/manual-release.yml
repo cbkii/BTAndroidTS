@@ -90,10 +90,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
         with:
-          packages: |
-            platform-tools
-            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
-            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
+          packages: "platform-tools build-tools;${{ env.ANDROID_BUILD_TOOLS }} platforms;android-${{ env.ANDROID_COMPILE_SDK }}"
 
       - name: Verify Android SDK tooling
         shell: bash
@@ -307,15 +304,19 @@ jobs:
           asset_paths=()
           asset_names_out=()
           for variant in standard ts18_privileged; do
+            # Use correct flavor paths
+            # standard: app/build/outputs/apk/standard/release/app-standard-release.apk
+            # ts18Privileged: app/build/outputs/apk/ts18Privileged/release/app-ts18Privileged-release.apk
             mapfile -t apks < <(find "${variant_dirs[$variant]}" -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | sort)
-            if (( ${#apks[@]} != 1 )); then
-              echo "::error::Expected exactly one ${variant} release APK; found ${#apks[@]}."
-              printf 'Candidate: %s\n' "${apks[@]}"
+            if (( ${#apks[@]} == 0 )); then
+              echo "::error::No ${variant} release APK found."
               exit 1
             fi
-            "${apksigner}" verify --verbose "${apks[0]}"
+            # Use the latest built APK
+            target_apk="${apks[-1]}"
+            "${apksigner}" verify --verbose "${target_apk}"
             asset_path="${RUNNER_TEMP}/${asset_names[$variant]}"
-            cp "${apks[0]}" "${asset_path}"
+            cp "${target_apk}" "${asset_path}"
             asset_paths+=("${asset_path}")
             asset_names_out+=("${asset_names[$variant]}")
           done

@@ -11,16 +11,19 @@ test -f "$APK_PATH"
 mkdir -p "$DEST_DIR" build
 cp "$APK_PATH" "$DEST_APK"
 
-if command -v aapt >/dev/null 2>&1; then
-  aapt dump badging "$DEST_APK" | grep -q "package: name='com.cbkii.btandroidts'"
-else
-  AAPT_CANDIDATE="$(find "${ANDROID_HOME:-/opt/android-sdk}" -path '*/build-tools/*/aapt' -type f 2>/dev/null | sort | tail -n 1 || true)"
-  if [ -z "$AAPT_CANDIDATE" ]; then
-    echo "aapt not found; cannot validate APK package name" >&2
+# Attempt to find aapt robustly
+AAPT_BIN="aapt"
+if ! command -v "$AAPT_BIN" >/dev/null 2>&1; then
+  # Try to find it in ANDROID_HOME or ANDROID_SDK_ROOT
+  SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
+  AAPT_BIN="$(find "$SDK_ROOT/build-tools" -name aapt -type f 2>/dev/null | sort -V | tail -n 1 || true)"
+  if [ -z "$AAPT_BIN" ]; then
+    echo "::error::aapt not found in PATH or $SDK_ROOT/build-tools" >&2
     exit 1
   fi
-  "$AAPT_CANDIDATE" dump badging "$DEST_APK" | grep -q "package: name='com.cbkii.btandroidts'"
 fi
+
+"$AAPT_BIN" dump badging "$DEST_APK" | grep -q "package: name='com.cbkii.btandroidts'"
 
 sh scripts/validate-magisk-package.sh
 
