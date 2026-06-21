@@ -37,12 +37,12 @@ jobs:
     timeout-minutes: 45
 
     env:
-      JAVA_VERSION: "21"
+      JAVA_VERSION: '21'
       JAVA_DISTRIBUTION: temurin
-      ANDROID_COMPILE_SDK: "37"
-      ANDROID_MIN_SDK: "29"
-      ANDROID_BUILD_TOOLS: "36.0.0"
-      REQUIRES_NINJA: "true"
+      ANDROID_COMPILE_SDK: '36'
+      ANDROID_MIN_SDK: '29'
+      ANDROID_BUILD_TOOLS: '36.0.0'
+      REQUIRES_NINJA: 'true'
 
     steps:
       - name: Checkout repository
@@ -51,6 +51,13 @@ jobs:
           fetch-depth: 0
           submodules: false
           persist-credentials: false
+
+      - name: Validate workflow and script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; ARGV.each { |f| Psych.safe_load(File.read(f), permitted_classes: [], permitted_symbols: [], aliases: false); puts "OK #{f}" }' .github/workflows/*.yml
+          find scripts -type f -name '*.sh' -print -exec bash -n {} \;
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -65,37 +72,28 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
-
-      - name: Install required Android SDK components
-        shell: bash
-        run: |
-          set -euo pipefail
-          set +e
-          yes 2>/dev/null | sdkmanager --licenses >/dev/null
-          sdkmanager_license_status="${PIPESTATUS[1]}"
-          set -e
-          if [[ "${sdkmanager_license_status}" -ne 0 ]]; then
-            echo "::error::sdkmanager --licenses failed with exit code ${sdkmanager_license_status}."
-            exit "${sdkmanager_license_status}"
-          fi
-          sdkmanager --channel=3 --install \
-            "platform-tools" \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "platforms;android-${ANDROID_COMPILE_SDK}"
-          echo "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
-          printf 'sdk.dir=%s\n' "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}" > local.properties
+        with:
+          packages: |
+            platform-tools
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+            platforms;android-${{ env.ANDROID_COMPILE_SDK }}
 
       - name: Verify Android SDK tooling
         shell: bash
         run: |
           set -euo pipefail
           sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
+            exit 1
+          fi
+          printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
           echo "ANDROID_HOME=${ANDROID_HOME:-}"
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
-          sdkmanager --list_installed || true
           test -d "${sdk_root}/platforms/android-${ANDROID_COMPILE_SDK}"
           test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
           test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
+          echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
 
       - name: Ensure native build tools are present
         shell: bash
@@ -110,6 +108,9 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y "${packages[@]}"
           fi
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
 
       - name: Unit tests
         run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:testStandardDebugUnitTest
@@ -207,6 +208,7 @@ jobs:
             echo
             echo "## Checks run"
             echo
+            echo "- Workflow YAML and shell syntax"
             echo "- Unit tests: \`:app:testStandardDebugUnitTest\`"
             echo "- Android lint: \`:app:lintStandardDebug\`"
             echo "- Manifest permission split check"
