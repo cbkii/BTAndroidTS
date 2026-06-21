@@ -41,6 +41,10 @@ fi
 
 # Extract package name from APK
 PKG_NAME="$("$AAPT_BIN" dump badging "$DEST_APK" | sed -n "s/package: name='\([^']*\)'.*/\1/p")"
+if [ -z "$PKG_NAME" ]; then
+  echo "::error::Failed to extract package name from APK" >&2
+  exit 1
+fi
 echo "Detected package: $PKG_NAME"
 
 # Determine if this is a debug build
