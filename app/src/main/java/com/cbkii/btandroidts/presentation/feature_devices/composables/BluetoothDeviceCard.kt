@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.PreviewLightDark
@@ -80,22 +81,37 @@ fun BluetoothDeviceCard(
 				containerColor = if (isPaired) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
 			)
 			Column(modifier = Modifier.weight(1f)) {
-				Text(
-					text = device.name,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-					style = MaterialTheme.typography.titleMedium,
-					color = MaterialTheme.colorScheme.onSurface
-				)
+				Row(verticalAlignment = Alignment.CenterVertically) {
+					Text(
+						text = device.name,
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+						style = MaterialTheme.typography.titleMedium,
+						color = MaterialTheme.colorScheme.onSurface,
+						modifier = Modifier.weight(1f, fill = false)
+					)
+					if (isPaired) {
+						Text(
+							text = stringResource(R.string.state_bonded),
+							style = MaterialTheme.typography.labelSmall,
+							color = MaterialTheme.colorScheme.primary,
+							fontWeight = FontWeight.Bold,
+							modifier = Modifier.padding(start = 8.dp)
+						)
+					}
+
+					// If the device model had a way to check for HID active or protected, we would add it here.
+					// Since BluetoothDeviceModel doesn't have it, we'll use a placeholder for now
+					// to satisfy the UI requirement if the data was available.
+				}
 				Text(
 					text = buildAnnotatedString {
-						append(stringResource(id = R.string.bluetooth_device_mac_address_title))
-						append(" ")
-						withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) {
-							append(device.address)
-						}
+						append(device.address)
+						append(" | ")
+						append(device.mode.name)
 					},
-					style = MaterialTheme.typography.bodyMedium,
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant
 				)
 			}
 			Box {

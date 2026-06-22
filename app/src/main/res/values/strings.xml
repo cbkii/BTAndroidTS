@@ -39,6 +39,25 @@
   <string name="ts18_dashboard_requires_validation">Needs TS18 test</string>
   <string name="ts18_dashboard_failed">Failed</string>
   <string name="ts18_dashboard_unavailable">Unavailable</string>
+
+  <string name="action_pair">Pair</string>
+  <string name="state_bonded">Bonded</string>
+  <string name="action_connect_hid">Connect HID</string>
+  <string name="state_hid_active">HID active</string>
+  <string name="state_input_active">Input active</string>
+  <string name="action_open_terminal">Open terminal</string>
+  <string name="action_send_file">Send file</string>
+  <string name="state_protected">Protected</string>
+
+  <string name="keyboard_test_title">Keyboard Test</string>
+  <string name="keyboard_test_desc">Type with your Bluetooth keyboard to verify input</string>
+  <string name="keyboard_test_placeholder">Focus here and start typing…</string>
+  <string name="keyboard_test_last_char">Last character: %s</string>
+
+  <string name="state_no_devices">No devices found</string>
+  <string name="state_scanning">Scanning for devices…</string>
+  <string name="state_pairing_failed">Pairing failed</string>
+  <string name="action_retry">Retry</string>
   <string name="supervisor_notification_title">BTAndroidTS supervision</string>
   <string name="supervisor_notification_channel">Peripheral supervision</string>
   <string name="supervisor_notification_channel_desc">Finite reconnect reconciliation for explicitly saved peripherals.</string>

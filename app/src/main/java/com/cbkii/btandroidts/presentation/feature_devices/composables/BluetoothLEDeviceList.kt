@@ -5,12 +5,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.domain.bluetooth_le.models.BluetoothLEDeviceModel
@@ -33,6 +37,7 @@ fun BluetoothLeDeviceList(
 	onLocationPermissionChanged: (Boolean) -> Unit,
 	onDeviceSelect: (BluetoothLEDeviceModel) -> Unit,
 	modifier: Modifier = Modifier,
+	isScanning: Boolean = false,
 	contentPadding: PaddingValues = PaddingValues(0.dp)
 ) {
 	val isLocalInspectionMode = LocalInspectionMode.current
@@ -65,6 +70,43 @@ fun BluetoothLeDeviceList(
 						.fillMaxWidth()
 						.animateItem()
 				)
+			}
+
+			if (leDevices.isEmpty() && !isScanning) {
+				item {
+					Box(
+						modifier = Modifier
+							.fillMaxWidth()
+							.padding(16.dp),
+						contentAlignment = Alignment.Center
+					) {
+						Text(
+							text = stringResource(R.string.state_no_devices),
+							style = MaterialTheme.typography.bodyMedium,
+							textAlign = TextAlign.Center
+						)
+					}
+				}
+			}
+
+			if (isScanning) {
+				item {
+					Box(
+						modifier = Modifier
+							.fillMaxWidth()
+							.padding(16.dp),
+						contentAlignment = Alignment.Center
+					) {
+						Row(verticalAlignment = Alignment.CenterVertically) {
+							CircularProgressIndicator(modifier = Modifier.size(24.dp))
+							Text(
+								text = stringResource(R.string.state_scanning),
+								style = MaterialTheme.typography.bodyMedium,
+								modifier = Modifier.padding(start = 8.dp)
+							)
+						}
+					}
+				}
 			}
 		} else {
 			item {
