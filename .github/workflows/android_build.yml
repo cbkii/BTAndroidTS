@@ -4,23 +4,269 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - '.github/workflows/**'
+      - 'app/**'
+      - 'build.gradle'
+      - 'build.gradle.kts'
+      - 'settings.gradle'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - 'scripts/**'
+      - 'magisk/**'
+      - 'README.md'
+      - 'docs/**'
+  workflow_call:
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  android:
+    name: Android PR build
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      JAVA_VERSION: '21'
+      JAVA_DISTRIBUTION: temurin
+      ANDROID_COMPILE_SDK: '36'
+      ANDROID_MIN_SDK: '29'
+      ANDROID_BUILD_TOOLS: '36.0.0'
+      REQUIRES_NINJA: 'true'
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
 
-      - name: Grant execute permission to gradlew
-        run: chmod +x gradlew
+      - name: Validate workflow and script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; ARGV.each { |f| Psych.safe_load(File.read(f), permitted_classes: [], permitted_symbols: [], aliases: false); puts "OK #{f}" }' .github/workflows/*.yml
+          find scripts -type f -name '*.sh' -print -exec bash -n {} \;
 
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
+        with:
+          packages: "platform-tools build-tools;${{ env.ANDROID_BUILD_TOOLS }} platforms;android-${{ env.ANDROID_COMPILE_SDK }}"
+
+      - name: Configure local.properties
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
+            exit 1
+          fi
+          printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
+          echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
+
+      - name: Verify Android SDK tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
+            exit 1
+          fi
+          printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
+          echo "ANDROID_HOME=${ANDROID_HOME:-}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
+          test -d "${sdk_root}/platforms/android-${ANDROID_COMPILE_SDK}"
+          test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
+          test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
+
+      - name: Ensure native build tools are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=()
+          if [[ "${REQUIRES_NINJA}" == "true" ]] && ! command -v ninja >/dev/null 2>&1; then
+            packages+=("ninja-build")
+          fi
+          command -v zip >/dev/null 2>&1 || packages+=("zip")
+          if (( ${#packages[@]} > 0 )); then
+            sudo apt-get update
+            sudo apt-get install -y "${packages[@]}"
+          fi
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:testStandardDebugUnitTest
+
+      - name: Android lint
+        run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:lintStandardDebug
+
+      - name: Manifest permission checks
+        run: sh scripts/check-manifest-permissions.sh
+
+      - name: Build debug APKs
+        run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:assembleStandardDebug :app:assembleTs18PrivilegedDebug
+
+      - name: Package debug Magisk module
+        id: package_magisk
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Find the debug APK for the ts18Privileged flavor
+          # Path: app/build/outputs/apk/ts18Privileged/debug/app-ts18Privileged-debug.apk
+          mapfile -t apk_candidates < <(find app/build/outputs/apk/ts18Privileged/debug -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | sort)
+          if (( ${#apk_candidates[@]} == 0 )); then
+            echo "::error::No TS18 privileged debug APK found."
+            exit 1
+          fi
+          # Use the latest built APK. scripts/package-magisk.sh now calls validation internally.
+          sh scripts/package-magisk.sh "${apk_candidates[-1]}" "debug-ci"
+          echo "magisk_zip=build/BTAndroidTS-debug-ci-magisk.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build reports
+        id: build_reports_artifact
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: btandroidts-pr-build-reports
+          path: |
+            app/build/reports/**
+            build/reports/problems/**
+            app/build/outputs/logs/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload debug APKs
+        id: debug_apks_artifact
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: btandroidts-debug-apks
+          path: |
+            app/build/outputs/apk/standard/debug/*.apk
+            app/build/outputs/apk/ts18Privileged/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload debug Magisk module
+        id: magisk_module_artifact
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: btandroidts-debug-magisk-module
+          path: ${{ steps.package_magisk.outputs.magisk_zip }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Write Android build summary
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          BUILD_REPORTS_ARTIFACT_URL: ${{ steps.build_reports_artifact.outputs.artifact-url }}
+          DEBUG_APKS_ARTIFACT_URL: ${{ steps.debug_apks_artifact.outputs.artifact-url }}
+          MAGISK_MODULE_ARTIFACT_URL: ${{ steps.magisk_module_artifact.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          repo_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          run_url="${repo_url}/actions/runs/${GITHUB_RUN_ID}"
+
+          case "${JOB_STATUS}" in
+            success) result_message="✅ BTAndroidTS Android PR build completed successfully." ;;
+            failure) result_message="❌ BTAndroidTS Android PR build failed." ;;
+            cancelled) result_message="⚠️ BTAndroidTS Android PR build was cancelled." ;;
+            *) result_message="⚠️ BTAndroidTS Android PR build finished with status: ${JOB_STATUS}." ;;
+          esac
+
+          write_findings() {
+            local jobs_json
+            jobs_json="$(mktemp)"
+            if gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" > "${jobs_json}" 2>/dev/null; then
+              jq -r '
+                .jobs[]? as $job
+                | $job.steps[]?
+                | select((.conclusion // "") | IN("failure", "cancelled", "timed_out", "action_required"))
+                | "- **Step " + (.conclusion // "unknown") + "** — " + $job.name + " / " + .name
+              ' "${jobs_json}" | awk 'NF && !seen[$0]++'
+            else
+              echo "- Workflow job details could not be queried."
+            fi
+            rm -f "${jobs_json}"
+          }
+
+          {
+            echo "# BTAndroidTS Android PR build"
+            echo
+            echo "${result_message}"
+            echo
+            echo "## Build details"
+            echo
+            echo "- Event: \`${GITHUB_EVENT_NAME}\`"
+            echo "- Ref: \`${GITHUB_REF}\`"
+            echo "- Commit: [\`${GITHUB_SHA}\`](${repo_url}/commit/${GITHUB_SHA})"
+            echo "- Workflow run: [${GITHUB_RUN_ID}](${run_url})"
+            echo
+            echo "## Unique warnings/errors/failures"
+            echo
+            write_findings
+            echo
+            echo "## Checks run"
+            echo
+            echo "- Workflow YAML and shell syntax"
+            echo "- Unit tests: \`:app:testStandardDebugUnitTest\`"
+            echo "- Android lint: \`:app:lintStandardDebug\`"
+            echo "- Manifest permission split check"
+            echo "- Debug APK builds: \`:app:assembleStandardDebug\`, \`:app:assembleTs18PrivilegedDebug\`"
+            echo "- Magisk v28.1+ module structure (with recovery support)"
+            echo "- Debug Magisk module packaging with dynamic allowlist patching"
+            echo "- Magisk module safety validation (strict permissions and directives)"
+            echo
+            echo "## Artifacts"
+            echo
+            artifact_count=0
+            if [[ -n "${BUILD_REPORTS_ARTIFACT_URL:-}" ]]; then
+              echo "- [Build reports](${BUILD_REPORTS_ARTIFACT_URL})"
+              artifact_count=$((artifact_count + 1))
+            fi
+            if [[ -n "${DEBUG_APKS_ARTIFACT_URL:-}" ]]; then
+              echo "- [Debug APKs](${DEBUG_APKS_ARTIFACT_URL})"
+              artifact_count=$((artifact_count + 1))
+            fi
+            if [[ -n "${MAGISK_MODULE_ARTIFACT_URL:-}" ]]; then
+              echo "- [Debug Magisk module](${MAGISK_MODULE_ARTIFACT_URL})"
+              artifact_count=$((artifact_count + 1))
+            fi
+            if (( artifact_count == 0 )); then
+              echo "- No artifacts were uploaded for this run."
+            fi
+            echo
+            echo "## Logs"
+            echo
+            echo "- [Open workflow run](${run_url})"
+          } >> "$GITHUB_STEP_SUMMARY"

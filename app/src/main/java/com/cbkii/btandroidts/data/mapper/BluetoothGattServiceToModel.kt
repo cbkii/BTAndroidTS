@@ -1,0 +1,26 @@
+package com.cbkii.btandroidts.data.mapper
+
+import android.bluetooth.BluetoothGattService
+import com.cbkii.btandroidts.domain.bluetooth_le.enums.BLEServicesTypes
+import com.cbkii.btandroidts.domain.bluetooth_le.models.BLECharacteristicsModel
+import com.cbkii.btandroidts.domain.bluetooth_le.models.BLEServiceModel
+import kotlinx.collections.immutable.toPersistentList
+
+fun BluetoothGattService.toDomainModel(
+	probableName: String? = null,
+	characteristics: List<BLECharacteristicsModel> = emptyList()
+): BLEServiceModel = BLEServiceModel(
+	serviceId = instanceId,
+	serviceUUID = uuid,
+	serviceType = bleServiceType,
+	characteristics = characteristics.toPersistentList(),
+	probableName = probableName
+)
+
+
+private val BluetoothGattService.bleServiceType: BLEServicesTypes
+	get() = when (this.type) {
+		BluetoothGattService.SERVICE_TYPE_PRIMARY -> BLEServicesTypes.PRIMARY
+		BluetoothGattService.SERVICE_TYPE_SECONDARY -> BLEServicesTypes.SECONDARY
+		else -> BLEServicesTypes.UNKNOWN
+	}

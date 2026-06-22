@@ -1,104 +1,168 @@
-# BluetoothTerminalApp
+# BTAndroidTS Agent Guide
 
-This document provides an immediate, high-level understanding of the BluetoothTerminalApp codebase
-for AI assistants, agents, and new developers.
+This file is for developers, reviewers, contributors, and AI agents working in this repository.
+The public README is for end users; keep implementation details, validation rules, and agent
+instructions here or under `docs/`.
 
-## 1. Architecture Overview
+## Project Shape
 
-The project follows **Clean Architecture** principles combined with **MVVM (
-Model-ViewModel-ViewModel)** for the presentation layer. It is a single-module Android application (
-`app` module) with internal layering and feature-based organization.
+BTAndroidTS is a single-module Android app using Clean Architecture and MVVM:
 
-### Directory Structure
+- `app/src/main/java/com/cbkii/btandroidts/data/`: Android-specific implementations, Bluetooth
+  APIs, DataStore, OPP, diagnostics, Topway adapters, and platform mappers.
+- `app/src/main/java/com/cbkii/btandroidts/domain/`: Android-light interfaces, models, policies,
+  capability states, and business rules.
+- `app/src/main/java/com/cbkii/btandroidts/di/`: Koin dependency injection modules.
+- `app/src/main/java/com/cbkii/btandroidts/presentation/`: ViewModels, Compose UI, navigation, and
+  screen state.
+- `app/src/main/proto/`: Protobuf DataStore schemas.
+- `docs/`: TS18 evidence, implementation status, validation matrix, rollback, and lane model.
+- `magisk/`: Systemless privileged module skeleton.
+- `scripts/`: Android/Linux shell validation and packaging scripts.
 
-- `app/src/main/java/com/eva/bluetoothterminalapp/`
-    - `data/`: Implementations of domain repositories. Contains Android-specific Bluetooth and BLE
-      logic, DataStore persistence (Protobuf), and mappers.
-    - `domain/`: Business logic abstractions. Contains repository interfaces, domain models, enums,
-      and exceptions. This layer is independent of Android-specific implementation details where
-      possible.
-    - `di/`: Koin dependency injection modules (organized by functionality like `BLEModule`,
-      `BluetoothModule`, etc.).
-    - `presentation/`: UI logic and State management.
-        - Organized by features: `feature_connect`, `feature_devices`, `feature_le_connect`, etc.
-        - Each feature contains its own ViewModels, event contracts, and screen-level composables.
-    - `ui/`: Global UI theme (Color, Typography, Shape).
+## Core Stack
 
-## 2. Core Tech Stack & Dependencies
+- UI: Jetpack Compose and Material 3.
+- Navigation: Compose Destinations.
+- Concurrency: Kotlin Coroutines and Flow.
+- Dependency injection: Koin.
+- Persistence: DataStore with Protobuf.
+- Bluetooth: Android Classic Bluetooth, BLE, OPP delegation, and API-gated HID Host adapters.
+- Build variants: `standard` and `ts18Privileged`.
 
-- **UI:** Jetpack Compose (Material 3) with **Compose Destinations** for navigation.
-- **Concurrency:** Kotlin Coroutines & Flow for asynchronous operations and reactive state.
-- **Dependency Injection:** **Koin** (using `KoinStartup` for initialization).
-- **Persistence:** **DataStore** with **Protobuf** serialization for app settings.
-- **Bluetooth:** Standard Android Bluetooth APIs for Classic BT and Bluetooth Low Energy (BLE).
-- **Serialization:** Kotlinx Serialization for JSON and Protobuf for DataStore.
+## Development Rules
 
-## 3. Key Logic Hubs (The "Where to Look" Guide)
+- Use Android/Linux shell commands and `scripts/*.sh` in documentation. Do not add alternative host
+  shell guidance.
+- Keep Android framework APIs out of ViewModels. Use domain interfaces and inject data-layer
+  implementations.
+- Keep hidden/reflected APIs isolated behind narrow capability interfaces.
+- Add narrow R8 keep rules only for reflected members that are actually looked up.
+- Prefer DataStore or existing persistence patterns for durable state.
+- Validate MAC addresses before persistence or privileged/root operations.
+- Keep I/O bounded, cancellable, and off the main thread.
+- Do not add broad services, receivers, foreground notifications, boot work, or root commands.
+- Do not claim unrun tests, lint, CI, or TS18 runtime checks passed.
 
-If you need to modify or understand core functionality, start here:
+## Key Logic Hubs
 
-### Bluetooth Classic (BT)
+Classic Bluetooth:
 
-- **Scanning:** `data/bluetooth/AndroidBluetoothScanner.kt`
-- **Connection:** `data/bluetooth/AndroidBTClientConnector.kt` and `AndroidBTServerConnector.kt`
-- **Data Transfer:** `data/bluetooth/BluetoothTransferService.kt`
+- `data/bluetooth/AndroidBluetoothScanner.kt`
+- `data/bluetooth/AndroidBTClientConnector.kt`
+- `data/bluetooth/AndroidBTServerConnector.kt`
+- `data/bluetooth/BluetoothTransferService.kt`
 
-### Bluetooth Low Energy (BLE)
+BLE:
 
-- **Scanning:** `data/bluetooth_le/AndroidBluetoothLEScanner.kt`
-- **Connection & GATT:** `data/bluetooth_le/AndroidBLEClientConnector.kt` and
-  `data/bluetooth_le/BLEClientGattCallback.kt`
+- `data/bluetooth_le/AndroidBluetoothLEScanner.kt`
+- `data/bluetooth_le/AndroidBLEClientConnector.kt`
+- `data/bluetooth_le/BLEClientGattCallback.kt`
 
-### Settings & State
+TS18 peripheral manager:
 
-- **Persistence:** `data/datastore/` (Implementation) and `domain/settings/repository/` (
-  Interfaces).
-- **Global Settings ViewModel:** `presentation/feature_settings/AppSettingsViewModel.kt`
+- `domain/peripheral/*`
+- `data/peripheral/*`
+- `data/opp/*`
+- `presentation/feature_devices/*`
+- `presentation/feature_opp/*`
+- `app/src/main/proto/peripheral_policy.proto`
 
-### Navigation
+## Required Validation Commands
 
-- **Graph Definition:** `presentation/navigation/AppNavigation.kt`
-- Uses **Compose Destinations** (look for `@Destination` annotations on composables).
+Run these from an Android/Linux shell when changing behavior:
 
-## 4. Data Flow & State Management
+```bash
+./gradlew testStandardDebugUnitTest
+./gradlew lintStandardDebug
+./gradlew assembleStandardDebug
+./gradlew assembleStandardRelease
+./gradlew assembleTs18PrivilegedRelease
+sh scripts/check-manifest-permissions.sh
+sh scripts/package-magisk.sh
+sh scripts/validate-magisk-package.sh
+```
 
-The app follows a unidirectional data flow (UDF):
+If a command cannot run, record the exact command and exact failure.
 
-1. **User Action:** UI triggers an `Event` (e.g., `BTSettingsEvent`) in the `ViewModel`.
-2. **ViewModel logic:** The `ViewModel` performs logic or calls a `Repository` method.
-3. **Repository Action:** The `Repository` (implemented in `data/`) interacts with the Bluetooth
-   hardware or `DataStore`.
-4. **State Update:** `DataStore` or Bluetooth status flows back as a `Flow`.
-5. **UI Observation:** The `ViewModel` converts the `Flow` into a `StateFlow` (often using
-   `stateIn`). The Compose UI observes this state and recomposes.
+## TS18 Evidence Rules
 
-## 5. AI/Agent Context & Guidelines
+Use these labels consistently:
 
-- **UI Development:** Always use **Jetpack Compose**. Follow the Material 3 design system. Design
-  tokens should be pulled from the `ui/theme` package.
-- **Navigation:** Use **Compose Destinations**. Do not manually manage the NavGraph; use the
-  generated code and annotations.
-- **Dependency Injection:** Use **Koin**. When adding new services or ViewModels, ensure they are
-  registered in the appropriate module in the `di/` package.
-- **Immutability:** State exposed from ViewModels should be immutable. Use
-  `kotlinx-collections-immutable` where appropriate.
-- **Permissions:** Bluetooth operations require runtime permissions. Ensure you check for
-  `android.permission.BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN`, and `ACCESS_FINE_LOCATION` where
-  necessary.
-- **Architecture Integrity:** Do not call Android Bluetooth APIs directly from ViewModels. Always go
-  through a domain-defined interface (Repository) and provide an implementation in the `data/`
-  layer.
-- **Naming Conventions:** Repository implementations should be prefixed with `Android` if they are
-  platform-specific (e.g., `AndroidBluetoothScanner`).
+- Observed: direct evidence from the exact TS18, supplied diagnostics, docs, APK inspection, or
+  repository code.
+- Inferred: reasoned conclusion from observed evidence.
+- Hypothesis: plausible but unproven explanation.
+- Requires device validation: implementation may exist, but no exact TS18 runtime pass exists.
+- Unsupported: outside the approved safety model.
 
-## 6. Performance & Optimization (R8)
+Do not treat TS18, TS10M, TS10, or other 8581 units as interchangeable. Exact-device captures are
+highest priority.
 
-- **R8 Full Mode:** The project is configured to use **strict R8 Full Mode** (no compatibility
-  flags). This allows for aggressive constructor and member shrinking.
-- **Rule Discipline:** Avoid adding broad keep rules (e.g., `-keep class com.package.** { *; }`).
-  Prefer narrow rules or relying on library consumer rules.
-- **Protobuf:** Unused field shrinking for Protobuf is enabled via `-shrinkunusedprotofields` in
-  `proguard-rules.pro`.
-- **Validation:** When upgrading libraries or adding reflection-heavy code, always verify
-  functionality in a `release` build variant to ensure R8 hasn't stripped required members.
+## Exact-Device Baseline
 
+Latest exact-device baseline:
+
+- `s9863a1h10_Natv`; `uis8581a2h10` / `sp9863a`.
+- `TS18.2.2_20241210.165912_WINDOW-THEME1`.
+- FOTA `WINDOW-THEME1_1000`.
+- Android 10 / SDK 29; Linux 4.14.133.
+- 4 GB RAM; 64 GB-class eMMC; 1280x720.
+- DoFun Variety/TWTHEME; Magisk 28.1.
+
+Root state:
+
+- Observed `uid=0`, `u:r:magisk:s0`.
+- SELinux permissive; AVB orange/unlocked; verity enforcing.
+- `/` and `/vendor` are read-only device-mapper mounts.
+- Root does not provide platform keys, signature permissions, vendor identity, or UID 1000.
+
+## Protected Vendor Ecosystem
+
+Treat these as protected unless exact-device evidence and a rollback plan prove otherwise:
+
+- `com.tw.bt`
+- `com.tw.service*`
+- `com.tw.core`
+- `com.tw.coreservice`
+- `com.tw.carinfoservice`
+- `com.tw.eq`
+- DoFun / TWTHEME packages
+- ZLink/TLink packages
+- `gocsdk`, `blink`, `s-link`, `z-link`
+- vendor radio, audio, Bluetooth, thermal, reverse, keypad, and fan services
+- `com.android.bluetooth`
+- SystemUI, MediaProvider, external storage providers, FOTA/system updater
+
+Keep Android Bluetooth, MediaSession, audio focus, phone audio, contacts, projection, and Topway
+Bluetooth as separate lanes.
+
+## Hard Safety Boundaries
+
+Do not:
+
+- replace `Bluetooth.apk`, Bluetooth HAL, native libraries, WCN/controller firmware, or Topway
+  services;
+- edit or delete `/data/misc/bluedroid`;
+- clear all pairings;
+- disable protected Topway, projection, media, SystemUI, updater, or Bluetooth packages;
+- request `android.permission.BLUETOOTH_STACK`;
+- use `sharedUserId="android.uid.system"`;
+- claim UID 1000, platform signing, or vendor identity;
+- add broad SELinux rules;
+- repeatedly restart Bluetooth;
+- write to firmware, HAL, MCU, CAN, BOOT, display, or vendor partitions;
+- implement an inbound OBEX server while stock OPP is present;
+- mark TS18 runtime behavior as passed without exact-device capture.
+
+Say STOP when identity, signing, authority, firmware match, panel/BOOT match, or recovery path is
+inadequate.
+
+## Documentation Split
+
+- `README.md`: end-user overview, install choices, app usage, safety summary.
+- `CONTRIBUTING.md`: contributor workflow and validation requirements.
+- `AGENTS.md`: repository rules, architecture, TS18 constraints, and AI-agent guidance.
+- `docs/`: detailed evidence, status, validation matrix, installation/rollback, and lane model.
+
+Keep this split when editing Markdown.

@@ -1,0 +1,645 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Release tag, e.g. v18.0.1. Leave blank to auto-increment patch.'
+        required: false
+        type: string
+      draft:
+        description: 'Create release as draft'
+        required: true
+        default: true
+        type: boolean
+      prerelease:
+        description: 'Mark release as prerelease'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: manual-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Manual BTAndroidTS release
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      JAVA_VERSION: '21'
+      JAVA_DISTRIBUTION: temurin
+      ANDROID_COMPILE_SDK: '36'
+      ANDROID_MIN_SDK: '29'
+      ANDROID_BUILD_TOOLS: '36.0.0'
+      REQUIRES_NINJA: 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: false
+          persist-credentials: true
+
+      - name: Validate release context and workflow syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF_TYPE}" != "branch" ]]; then
+            echo "::error::Manual releases must run from a branch."
+            exit 1
+          fi
+          case "${GITHUB_REF_NAME}" in
+            main|feat/ts18-peripheral-manager) ;;
+            *)
+              echo "::error::Manual BTAndroidTS releases must run from main or feat/ts18-peripheral-manager, not '${GITHUB_REF_NAME}'."
+              exit 1
+              ;;
+          esac
+          git fetch --tags origin "+refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
+          local_head="$(git rev-parse HEAD)"
+          remote_head="$(git rev-parse "origin/${GITHUB_REF_NAME}")"
+          if [[ "${local_head}" != "${remote_head}" ]]; then
+            echo "::error::Release checkout is stale."
+            echo "::error::Local HEAD:  ${local_head}"
+            echo "::error::Remote head: ${remote_head}"
+            exit 1
+          fi
+          ruby -e 'require "yaml"; ARGV.each { |f| Psych.safe_load(File.read(f), permitted_classes: [], permitted_symbols: [], aliases: false); puts "OK #{f}" }' .github/workflows/*.yml
+          find scripts -type f -name '*.sh' -print -exec bash -n {} \;
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
+        with:
+          packages: "platform-tools build-tools;${{ env.ANDROID_BUILD_TOOLS }} platforms;android-${{ env.ANDROID_COMPILE_SDK }}"
+
+      - name: Verify Android SDK tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
+            exit 1
+          fi
+          printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
+          echo "ANDROID_HOME=${ANDROID_HOME:-}"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
+          test -d "${sdk_root}/platforms/android-${ANDROID_COMPILE_SDK}"
+          test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
+          test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
+          echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
+
+      - name: Ensure native build tools are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=()
+          if [[ "${REQUIRES_NINJA}" == "true" ]] && ! command -v ninja >/dev/null 2>&1; then
+            packages+=("ninja-build")
+          fi
+          command -v zip >/dev/null 2>&1 || packages+=("zip")
+          command -v unzip >/dev/null 2>&1 || packages+=("unzip")
+          if (( ${#packages[@]} > 0 )); then
+            sudo apt-get update
+            sudo apt-get install -y "${packages[@]}"
+          fi
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Compute release version and check collisions
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          INPUT_VERSION_TAG: ${{ inputs.version_tag }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin "+refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
+          input_tag="$(printf '%s' "${INPUT_VERSION_TAG}" | xargs)"
+          current_version_name="$({ sed -n -E 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' app/build.gradle.kts || true; } | head -n1)"
+          current_version_code="$({ sed -n -E 's/^[[:space:]]*versionCode[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' app/build.gradle.kts || true; } | head -n1)"
+          if [[ -z "${current_version_name}" || -z "${current_version_code}" ]]; then
+            echo "::error::Unable to find versionName/versionCode in app/build.gradle.kts."
+            exit 1
+          fi
+          previous_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1 || true)"
+          if [[ -n "${input_tag}" ]]; then
+            if [[ ! "${input_tag}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::Invalid version_tag '${input_tag}'. Expected MAJOR.MINOR.PATCH, vMAJOR.MINOR.PATCH, or a semver prerelease suffix."
+              exit 1
+            fi
+            [[ "${input_tag}" == v* ]] && release_tag="${input_tag}" || release_tag="v${input_tag}"
+          else
+            if [[ -n "${previous_tag}" ]]; then
+              base_version="${previous_tag#v}"
+            elif [[ "${current_version_name}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+              base_version="${current_version_name}"
+            else
+              base_version="0.1.0"
+            fi
+            semver_core="${base_version%%-*}"
+            semver_core="${semver_core%%+*}"
+            IFS='.' read -r major minor patch <<< "${semver_core}"
+            release_tag="v${major}.${minor}.$((patch + 1))"
+          fi
+          if git rev-parse -q --verify "refs/tags/${release_tag}" >/dev/null; then
+            echo "::error::Tag '${release_tag}' already exists."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
+            echo "::error::Remote tag '${release_tag}' already exists."
+            exit 1
+          fi
+          if gh release view "${release_tag}" >/dev/null 2>&1; then
+            echo "::error::Release '${release_tag}' already exists."
+            exit 1
+          fi
+          release_version_name="${release_tag#v}"
+          release_version_code="$((current_version_code + 1))"
+          {
+            echo "release_tag=${release_tag}"
+            echo "release_version_name=${release_version_name}"
+            echo "release_version_code=${release_version_code}"
+            echo "previous_tag=${previous_tag}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure release signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -z "${KEYSTORE_BASE64}" ]] && missing+=("KEYSTORE_BASE64")
+          [[ -z "${KEYSTORE_PASSWORD}" ]] && missing+=("KEYSTORE_PASSWORD")
+          [[ -z "${KEY_ALIAS}" ]] && missing+=("KEY_ALIAS")
+          [[ -z "${KEY_PASSWORD}" ]] && missing+=("KEY_PASSWORD")
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error::Missing required release signing secrets: ${missing[*]}"
+            exit 1
+          fi
+          echo "::add-mask::${KEYSTORE_PASSWORD}"
+          echo "::add-mask::${KEY_ALIAS}"
+          echo "::add-mask::${KEY_PASSWORD}"
+          mkdir -p "${HOME}/keystore"
+          keystore_name="btandroidts-release.keystore"
+          keystore_path="${HOME}/keystore/${keystore_name}"
+          printf '%s' "${KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+          chmod 600 "${keystore_path}"
+          {
+            printf 'STORE_FILE_NAME=%s\n' "${keystore_name}"
+            printf 'STORE_PASSWORD=%s\n' "${KEYSTORE_PASSWORD}"
+            printf 'KEY_ALIAS=%s\n' "${KEY_ALIAS}"
+            printf 'KEY_PASSWORD=%s\n' "${KEY_PASSWORD}"
+          } > keystore.properties
+
+      - name: Update Android version metadata locally
+        shell: bash
+        env:
+          RELEASE_VERSION_NAME: ${{ steps.version.outputs.release_version_name }}
+          RELEASE_VERSION_CODE: ${{ steps.version.outputs.release_version_code }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+          path = Path('app/build.gradle.kts')
+          text = path.read_text(encoding='utf-8')
+          version_name = os.environ['RELEASE_VERSION_NAME']
+          version_code = os.environ['RELEASE_VERSION_CODE']
+          text, name_count = re.subn(r'(versionName\s*=\s*)"[^"]+"', rf'\1"{version_name}"', text, count=1)
+          text, code_count = re.subn(r'(versionCode\s*=\s*)\d+', rf'\g<1>{version_code}', text, count=1)
+          if name_count != 1 or code_count != 1:
+              raise SystemExit(f'Expected one versionName/versionCode replacement; got versionName={name_count}, versionCode={code_count}.')
+          path.write_text(text, encoding='utf-8', newline='\n')
+
+          prop_path = Path('magisk/BTAndroidTS/module.prop')
+          if prop_path.exists():
+              prop_text = prop_path.read_text(encoding='utf-8')
+              prop_text = re.sub(r'version=.*', f'version={version_name}', prop_text)
+              prop_text = re.sub(r'versionCode=.*', f'versionCode={version_code}', prop_text)
+              prop_path.write_text(prop_text, encoding='utf-8', newline='\n')
+          PY
+
+      - name: Commit release version metadata locally
+        id: version_commit
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- app/build.gradle.kts; then
+            echo "::error::Version metadata did not change; refusing to continue."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/build.gradle.kts
+          git commit -m "chore(release): prepare ${RELEASE_TAG}"
+          echo "release_commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Unit tests
+        run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:testStandardDebugUnitTest
+
+      - name: Android lint
+        run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:lintStandardDebug
+
+      - name: Manifest permission checks
+        run: sh scripts/check-manifest-permissions.sh
+
+      - name: Build signed release APKs
+        run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:assembleStandardRelease :app:assembleTs18PrivilegedRelease
+
+      - name: Package and validate Magisk module
+        id: package_magisk
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apk_candidates < <(find app/build/outputs/apk/ts18Privileged/release -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | sort)
+          if (( ${#apk_candidates[@]} != 1 )); then
+            echo "::error::Expected exactly one signed TS18 privileged release APK; found ${#apk_candidates[@]}."
+            printf 'Candidate: %s\n' "${apk_candidates[@]}"
+            exit 1
+          fi
+          # scripts/package-magisk.sh now calls validation internally
+          sh scripts/package-magisk.sh "${apk_candidates[0]}" "release"
+          unzip -t build/BTAndroidTS-release-magisk.zip >/dev/null
+          echo "magisk_zip=build/BTAndroidTS-release-magisk.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Locate, verify, and rename release artifacts
+        id: artifacts
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          build_tools_dir="$(find "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
+          apksigner="${build_tools_dir}/apksigner"
+          test -x "${apksigner}"
+          declare -A variant_dirs=(
+            [standard]="app/build/outputs/apk/standard/release"
+            [ts18_privileged]="app/build/outputs/apk/ts18Privileged/release"
+          )
+          declare -A asset_names=(
+            [standard]="BTAndroidTS-${RELEASE_TAG}-standard-release.apk"
+            [ts18_privileged]="BTAndroidTS-${RELEASE_TAG}-ts18-privileged-release.apk"
+          )
+          asset_paths=()
+          asset_names_out=()
+          for variant in standard ts18_privileged; do
+            # Use correct flavor paths
+            # standard: app/build/outputs/apk/standard/release/app-standard-release.apk
+            # ts18Privileged: app/build/outputs/apk/ts18Privileged/release/app-ts18Privileged-release.apk
+            mapfile -t apks < <(find "${variant_dirs[$variant]}" -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | sort)
+            if (( ${#apks[@]} == 0 )); then
+              echo "::error::No ${variant} release APK found."
+              exit 1
+            fi
+            # Use the latest built APK
+            target_apk="${apks[-1]}"
+            "${apksigner}" verify --verbose "${target_apk}"
+            asset_path="${RUNNER_TEMP}/${asset_names[$variant]}"
+            cp "${target_apk}" "${asset_path}"
+            asset_paths+=("${asset_path}")
+            asset_names_out+=("${asset_names[$variant]}")
+          done
+          magisk_name="BTAndroidTS-${RELEASE_TAG}-magisk.zip"
+          magisk_path="${RUNNER_TEMP}/${magisk_name}"
+          cp "${{ steps.package_magisk.outputs.magisk_zip }}" "${magisk_path}"
+          unzip -t "${magisk_path}" >/dev/null
+          asset_paths+=("${magisk_path}")
+          asset_names_out+=("${magisk_name}")
+          {
+            printf 'asset_paths<<EOF\n'
+            printf '%s\n' "${asset_paths[@]}"
+            printf 'EOF\n'
+            printf 'asset_names<<EOF\n'
+            printf '%s\n' "${asset_names_out[@]}"
+            printf 'EOF\n'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload release workflow artifacts
+        id: release_artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: BTAndroidTS-${{ steps.version.outputs.release_tag }}-release-artifacts
+          path: ${{ runner.temp }}/BTAndroidTS-${{ steps.version.outputs.release_tag }}-*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Push release commit
+        shell: bash
+        env:
+          RELEASE_COMMIT_SHA: ${{ steps.version_commit.outputs.release_commit_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin "+refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
+          remote_head="$(git rev-parse "origin/${GITHUB_REF_NAME}")"
+          release_parent_sha="$(git rev-parse "${RELEASE_COMMIT_SHA}^")"
+          if [[ "${release_parent_sha}" != "${remote_head}" ]]; then
+            echo "::error::Remote ${GITHUB_REF_NAME} moved while the release build was running."
+            echo "::error::Release commit parent: ${release_parent_sha}"
+            echo "::error::Remote head:           ${remote_head}"
+            exit 1
+          fi
+          git push origin "${RELEASE_COMMIT_SHA}:refs/heads/${GITHUB_REF_NAME}"
+          git fetch origin "+refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
+          test "$(git rev-parse "origin/${GITHUB_REF_NAME}")" = "${RELEASE_COMMIT_SHA}"
+
+      - name: Push release tag
+        id: tag_push
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          RELEASE_COMMIT_SHA: ${{ steps.version_commit.outputs.release_commit_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --tags origin
+          if git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "::error::Remote tag '${RELEASE_TAG}' already exists."
+            exit 1
+          fi
+          git tag "${RELEASE_TAG}" "${RELEASE_COMMIT_SHA}"
+          git push origin "refs/tags/${RELEASE_TAG}"
+          echo "tag_pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PREVIOUS_TAG: ${{ steps.version.outputs.previous_tag }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          RELEASE_COMMIT_SHA: ${{ steps.version_commit.outputs.release_commit_sha }}
+        run: |
+          set -euo pipefail
+          notes_file="${RUNNER_TEMP}/release-notes.md"
+          generated_body=""
+          gh_api_args=(-f tag_name="${RELEASE_TAG}")
+          [[ -n "${PREVIOUS_TAG}" ]] && gh_api_args+=(-f "previous_tag_name=${PREVIOUS_TAG}")
+          if generated_body="$(gh api --method POST "/repos/${GITHUB_REPOSITORY}/releases/generate-notes" "${gh_api_args[@]}" --jq '.body // empty' 2>/dev/null)" && [[ -n "${generated_body}" ]]; then
+            echo "GitHub generated release notes successfully."
+          else
+            echo "::warning::Generated release notes unavailable; using git log fallback."
+          fi
+          {
+            echo "## What's changed"
+            echo
+            if [[ -n "${generated_body}" ]]; then
+              printf '%s\n' "${generated_body}" | grep -viE "^## What's [Cc]hanged" || true
+            elif [[ -n "${PREVIOUS_TAG}" ]]; then
+              git log --reverse --pretty=format:"- [%s](https://github.com/${GITHUB_REPOSITORY}/commit/%H) by %an" "${PREVIOUS_TAG}..${RELEASE_TAG}"
+            else
+              git log --reverse --max-count=100 --pretty=format:"- [%s](https://github.com/${GITHUB_REPOSITORY}/commit/%H) by %an" "${RELEASE_TAG}"
+            fi
+            echo
+            echo "## Release assets"
+            echo
+            echo "- Standard APK: normal user-installable BTAndroidTS build."
+            echo "- TS18 privileged APK: APK intended for Magisk priv-app packaging."
+            echo "- Magisk ZIP: systemless TS18 privileged package with privapp allowlist."
+            echo
+            echo "## TS18 safety notes"
+            echo
+            echo "This release does not replace Bluetooth.apk, Bluetooth HAL, WCN firmware, Topway services, or vendor pairing databases. Real HID/OPP/TLink coexistence requires exact-device validation."
+          } > "${notes_file}"
+          if ! grep -qE '^- ' "${notes_file}"; then
+            printf -- "- [Release commit](https://github.com/%s/commit/%s) by @github-actions[bot]\n" "${GITHUB_REPOSITORY}" "${RELEASE_COMMIT_SHA}" >> "${notes_file}"
+          fi
+          echo "notes_file=${notes_file}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release and upload assets
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          RELEASE_NOTES_FILE: ${{ steps.notes.outputs.notes_file }}
+          ASSET_PATHS: ${{ steps.artifacts.outputs.asset_paths }}
+          ASSET_NAMES: ${{ steps.artifacts.outputs.asset_names }}
+          IS_DRAFT: ${{ inputs.draft }}
+          IS_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          release_args=()
+          [[ "${IS_DRAFT}" == "true" ]] && release_args+=("--draft")
+          [[ "${IS_PRERELEASE}" == "true" ]] && release_args+=("--prerelease")
+          mapfile -t asset_paths <<< "${ASSET_PATHS}"
+          mapfile -t asset_names <<< "${ASSET_NAMES}"
+          if (( ${#asset_paths[@]} != ${#asset_names[@]} )); then
+            echo "::error::Release asset path/name count mismatch."
+            exit 1
+          fi
+          release_assets=()
+          for i in "${!asset_paths[@]}"; do
+            release_assets+=("${asset_paths[$i]}#${asset_names[$i]}")
+          done
+          gh release create "${RELEASE_TAG}" "${release_assets[@]}" \
+            --title "${RELEASE_TAG}" \
+            --notes-file "${RELEASE_NOTES_FILE}" \
+            --verify-tag \
+            "${release_args[@]}"
+          echo "release_url=$(gh release view "${RELEASE_TAG}" --json url --jq '.url')" >> "$GITHUB_OUTPUT"
+
+      - name: Cleanup release tag after failed release creation
+        if: ${{ failure() && steps.tag_push.outputs.tag_pushed == 'true' && steps.release.outcome != 'success' }}
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          RELEASE_COMMIT_SHA: ${{ steps.version_commit.outputs.release_commit_sha }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} exists; keeping remote tag."
+            exit 0
+          fi
+          remote_tag_sha="$(git ls-remote --tags origin "refs/tags/${RELEASE_TAG}" | awk '{print $1}' || true)"
+          if [[ "${remote_tag_sha}" == "${RELEASE_COMMIT_SHA}" ]]; then
+            git push origin ":refs/tags/${RELEASE_TAG}" || true
+          else
+            echo "Remote tag is absent or no longer points at this workflow's release commit; no cleanup performed."
+          fi
+
+      - name: Verify GitHub release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          ASSET_NAMES: ${{ steps.artifacts.outputs.asset_names }}
+        run: |
+          set -euo pipefail
+          gh release view "${RELEASE_TAG}" --json tagName,isDraft,isPrerelease,url,assets
+          while IFS= read -r asset; do
+            [[ -z "${asset}" ]] && continue
+            gh release view "${RELEASE_TAG}" --json assets --jq '.assets[].name' | grep -Fx -- "${asset}" >/dev/null
+            echo "Verified release asset: ${asset}"
+          done <<< "${ASSET_NAMES}"
+
+      - name: Upload release build reports
+        id: release_reports_artifact
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: BTAndroidTS-release-build-reports
+          path: |
+            app/build/reports/**
+            build/reports/problems/**
+            app/build/outputs/logs/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Write release summary
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+          RELEASE_VERSION_NAME: ${{ steps.version.outputs.release_version_name }}
+          RELEASE_VERSION_CODE: ${{ steps.version.outputs.release_version_code }}
+          RELEASE_URL: ${{ steps.release.outputs.release_url }}
+          ASSET_NAMES: ${{ steps.artifacts.outputs.asset_names }}
+          RELEASE_ARTIFACT_URL: ${{ steps.release_artifact.outputs.artifact-url }}
+          RELEASE_REPORTS_ARTIFACT_URL: ${{ steps.release_reports_artifact.outputs.artifact-url }}
+          RELEASE_ARTIFACT_NAME: BTAndroidTS-${{ steps.version.outputs.release_tag }}-release-artifacts
+        run: |
+          set -euo pipefail
+          repo_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          run_url="${repo_url}/actions/runs/${GITHUB_RUN_ID}"
+          release_tag="${RELEASE_TAG:-<not computed>}"
+          case "${JOB_STATUS}" in
+            success) result_message="✅ BTAndroidTS release workflow completed successfully." ;;
+            failure) result_message="❌ BTAndroidTS release workflow failed." ;;
+            cancelled) result_message="⚠️ BTAndroidTS release workflow was cancelled." ;;
+            *) result_message="⚠️ BTAndroidTS release workflow finished with status: ${JOB_STATUS}." ;;
+          esac
+          write_release_asset_links() {
+            if [[ -z "${RELEASE_TAG:-}" ]]; then
+              echo "- Release tag was not computed; no release assets are available yet."
+              return
+            fi
+            local release_json
+            if release_json="$(gh api "/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" 2>/dev/null)" && jq -e '.assets | type == "array" and length > 0' <<< "${release_json}" >/dev/null; then
+              jq -r --arg repo_url "${repo_url}" --arg tag "${RELEASE_TAG}" '
+                .assets
+                | unique_by(.name)
+                | sort_by(.name)[]
+                | "- [" + .name + "](" +
+                    (if ((.browser_download_url // "") | startswith("https://")) then .browser_download_url else $repo_url + "/releases/download/" + ($tag | @uri) + "/" + (.name | @uri) end)
+                    + ") — " + ((.size // 0) | tostring) + " bytes"
+              ' <<< "${release_json}"
+            else
+              echo "- Individual release assets could not be queried."
+              echo "- [Open release ${release_tag}](${repo_url}/releases/tag/${release_tag})"
+            fi
+          }
+          write_findings() {
+            local jobs_json
+            jobs_json="$(mktemp)"
+            if gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" > "${jobs_json}" 2>/dev/null; then
+              jq -r '
+                .jobs[]? as $job
+                | $job.steps[]?
+                | select((.conclusion // "") | IN("failure", "cancelled", "timed_out", "action_required"))
+                | "- **Step " + (.conclusion // "unknown") + "** — " + $job.name + " / " + .name
+              ' "${jobs_json}" | awk 'NF && !seen[$0]++'
+            else
+              echo "- Workflow job details could not be queried."
+            fi
+            rm -f "${jobs_json}"
+          }
+          {
+            echo "# BTAndroidTS release"
+            echo
+            echo "${result_message}"
+            echo
+            echo "## Release details"
+            echo
+            echo "- Tag: \`${release_tag}\`"
+            echo "- Version name: \`${RELEASE_VERSION_NAME:-<not computed>}\`"
+            echo "- Version code: \`${RELEASE_VERSION_CODE:-<not computed>}\`"
+            echo "- Draft: \`${{ inputs.draft }}\`"
+            echo "- Prerelease: \`${{ inputs.prerelease }}\`"
+            echo "- Branch: \`${GITHUB_REF_NAME}\`"
+            echo "- Workflow run: [${GITHUB_RUN_ID}](${run_url})"
+            if [[ -n "${RELEASE_URL:-}" ]]; then
+              echo "- Release: [${release_tag}](${RELEASE_URL})"
+            fi
+            echo
+            echo "## Expected assets"
+            echo
+            if [[ -n "${ASSET_NAMES:-}" ]]; then
+              while IFS= read -r asset_name; do
+                [[ -n "${asset_name}" ]] && echo "- \`${asset_name}\`"
+              done <<< "${ASSET_NAMES}"
+            else
+              echo "- Asset names were not produced before the workflow stopped."
+            fi
+            echo
+            echo "## Workflow artifacts"
+            echo
+            if [[ -n "${RELEASE_ARTIFACT_URL:-}" ]]; then
+              echo "- [${RELEASE_ARTIFACT_NAME}](${RELEASE_ARTIFACT_URL})"
+            fi
+            if [[ -n "${RELEASE_REPORTS_ARTIFACT_URL:-}" ]]; then
+              echo "- [BTAndroidTS-release-build-reports](${RELEASE_REPORTS_ARTIFACT_URL})"
+            fi
+            if [[ -z "${RELEASE_ARTIFACT_URL:-}" && -z "${RELEASE_REPORTS_ARTIFACT_URL:-}" ]]; then
+              echo "- No downloadable workflow artifacts were produced."
+            fi
+            echo
+            echo "## GitHub release assets"
+            echo
+            write_release_asset_links
+            echo
+            echo "## Unique warnings/errors/failures"
+            echo
+            write_findings
+            echo
+            echo "## Checks run"
+            echo
+            echo "- Unit tests: \`:app:testStandardDebugUnitTest\`"
+            echo "- Android lint: \`:app:lintStandardDebug\`"
+            echo "- Manifest permission split check"
+            echo "- Release APK builds: \`:app:assembleStandardRelease\`, \`:app:assembleTs18PrivilegedRelease\`"
+            echo "- APK signature verification: \`apksigner verify\`"
+            echo "- Magisk v28.1+ module structure (with recovery support)"
+            echo "- Release Magisk module packaging and validation"
+            echo "- Magisk module safety validation (strict permissions and directives)"
+            echo
+            echo "## Logs"
+            echo
+            echo "- [Open workflow run](${run_url})"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,18 +1,88 @@
-# :large_blue_circle: Bluetooth Terminal App
+# BTAndroidTS
 
-This Bluetooth Android Terminal App facilitates interaction with Bluetooth and Bluetooth Low
-Energy (BLE) devices.The app provides a user-friendly interface to manage connections, interactwith
-devices.
+BTAndroidTS is a Bluetooth peripheral manager for Topway TS18 Android head units. It is designed
+to help manage keyboards, remotes, controllers, BLE devices, and Bluetooth file sharing on the
+Android Bluetooth lane while leaving the factory Topway phone and Android Auto lane alone.
 
-## :information_desk_person: Description
+This app is derived from the original MIT-licensed Bluetooth terminal app. The original licence is
+preserved in [LICENSE](LICENSE).
 
-The Bluetooth Android Terminal App supports both classic Bluetooth and Bluetooth Low Energy (BLE)
-connections. It allows users to scan for available devices, establish connections, and communicate
-with connected devices.
-Additionally, the app includes a built-in server functionality for simple interactions between two
-peers running the same app
+## Who This App Is For
 
-## :performing_arts: Features
+Use BTAndroidTS if you have a TS18 / Topway-style Android head unit and want a safer way to inspect
+or manage Android Bluetooth peripherals without disturbing factory phone, media, contacts, or
+projection features.
+
+Primary target:
+
+- Topway TS18 / UIS8581A / SP9863A units.
+- Android 10 / API 29 runtime.
+- 1280x720 landscape head-unit screens.
+- Standard APK use first; Magisk privileged install only for tested TS18 workflows.
+
+BTAndroidTS is not a replacement for the factory Bluetooth phone app, Android Auto, ZLink/TLink, or
+Topway services.
+
+## What It Can Do
+
+- Show a combined Classic Bluetooth and BLE device inventory.
+- Keep vendor and protected devices separate from Android peripherals.
+- Run bounded Bluetooth scans instead of continuous discovery.
+- Preserve the Topway phone/projection lane for calls, phone audio, contacts, and projection.
+- Keep RFCOMM terminal and BLE GATT tools under Advanced Tools.
+- Accept Android share intents for Bluetooth OPP file sharing and delegate outbound sending to the
+  stock Android Bluetooth service.
+- Export bounded local diagnostics for troubleshooting.
+- Provide a TS18 privileged build shape for Magisk, with a narrow `BLUETOOTH_PRIVILEGED` allowlist.
+
+## What Still Needs Real TS18 Validation
+
+Do not treat these as passed until they have been tested on the actual head unit:
+
+- HID Host keyboard, remote, controller, and phone-as-keyboard connection.
+- Android input-node creation and typing.
+- Bluetooth OPP destination picking, progress, cancellation, and receive behavior.
+- Cold boot, activity close, process death, and ACC sleep/wake reconnection.
+- Magisk privileged permission grant and rollback.
+- Calls, phone audio, contacts, and ZLink/TLink/Android Auto coexistence.
+
+## Installation
+
+### Standard APK
+
+Install the standard APK first. It is the safest path and does not request privileged Bluetooth
+authority.
+
+```bash
+adb install -r BTAndroidTS-standard-release.apk
+```
+
+Grant the Bluetooth and location permissions Android requests. Android 10/11 can require location
+permission for Bluetooth scanning.
+
+### TS18 Magisk Privileged Variant
+
+Use the Magisk variant only when you have a tested rollback path. The module is systemless and is
+intended to place the APK under `system/priv-app` with only the matching
+`BLUETOOTH_PRIVILEGED` allowlist.
+
+Before installing the module:
+
+- Save current TS18 diagnostics and stock settings.
+- Confirm the module can be disabled from Magisk.
+- Confirm you can recover from a bad boot.
+- Do not replace `Bluetooth.apk`, native Bluetooth libraries, firmware, or Topway apps.
+
+## How To Use
+
+- Open **Phone / Android Auto** to reach the existing Topway phone/projection lane.
+- Use **Keyboards / Peripherals** for Android Bluetooth peripherals.
+- Use **File Sharing** through Android Share; BTAndroidTS delegates to stock Bluetooth OPP.
+- Use **Diagnostics** only when you want a local troubleshooting report.
+- Use **Advanced Tools** for RFCOMM terminal and BLE GATT work.
+
+Connection labels are intentionally explicit: RFCOMM terminal, BLE GATT, HID Host, ACL, and OPP are
+different actions.
 
 ### Classic Bluetooth
 
@@ -30,64 +100,51 @@ peers running the same app
 - **Server** A BLE Server with battery and enviromental sensing (illuminanace) and various services
 - **Settings:** You can customize scan settings for the app to discover your device.
 
-## :camera_flash: Screenshots
+## Screenshots
 
 These are some of the screens shots showing the working of classic bluetooth connection
 
 <p align="center">
-   <img src="screenshots/bt_classic_scan.png" width="20%" />
-   <img src="screenshots/bt_peer_features.png" width="20%"/>
-   <img src="screenshots/bt_client_talking.png" width="20%"/>  
-   <img src="screenshots/bt_classic_settings.png" width="20%"/>
+   <img src="screenshots/bt_classic_scan.png" width="22%" />
+   <img src="screenshots/bt_peer_features.png" width="22%"/>
+   <img src="screenshots/bt_client_talking.png" width="22%"/>  
+   <img src="screenshots/bt_classic_settings.png" width="22%"/>
 </p>
 
 This screenshots shows the working of a bluetooth low energy device connection
 
 <p align="center">
-   <img src="screenshots/ble_devices_scanning.png" width="20%" />
-   <img src="screenshots/ble_device_profile.png" width="20%"/>
-   <img src="screenshots/ble_notify_running.png" width="20%"/>  
-   <img src="screenshots/ble_settings.png" width="20%">
+   <img src="screenshots/ble_devices_scanning.png" width="22%" />
+   <img src="screenshots/ble_device_profile.png" width="22%"/>
+   <img src="screenshots/ble_notify_running.png" width="22%"/>  
+   <img src="screenshots/ble_settings.png" width="22%">
 </p>
 
-## :building_construction: Getting Started
+## Safety Rules
 
-Make sure the device supports **Bluetooth** and if possible **Bluetooth Low Energy** to check out
-its functionalities
+BTAndroidTS must not:
 
-1. **Clone the Repository:**
+- clear all Bluetooth pairings;
+- replace the Android Bluetooth stack;
+- edit `/data/misc/bluedroid`;
+- disable `com.tw.bt`, `com.tw.service*`, ZLink/TLink, DoFun, SystemUI, MediaProvider, or updater
+  packages;
+- request `BLUETOOTH_STACK`, UID 1000, platform signing, or a system shared UID;
+- repeatedly restart Bluetooth;
+- write to firmware, HAL, MCU, CAN, BOOT, display, or vendor partitions.
 
-   ```bash
-   git clone https://github.com/tuuhin/BTAndroidApp.git
-   ```
+## More Information
 
-2. **Open Project**
-   Open the project in android studio
+Developer, reviewer, and AI-agent guidance lives outside this end-user README:
 
-3. **Build and Run**
-   Build and run on android device with API _29_ (Android 10) and above
-
-### :curly_loop: Feedback and Support
-
-If you encounter any problems or bugs in the app, please raise
-an [issue](https://github.com/tuuhin/BTAndroidApp/issues/new)
-
-### :man_cook: Contributing
-
-We welcome contributions to the `BTAndroidApp` project! Please take a moment to review
-our [Contribution Guidelines](CONTRIBUTING.md) before submitting pull requests or issues.
-
-## :end: Conclusiion
-
-The Bluetooth Android Terminal App is a versatile tool for interacting with Bluetooth and BLE
-devices. While the app aims to provide a seamless experience and was created to debug esp32 based
-microcontroller which have bluetooth features.
-These seems complete for now , but if someone encounter any issues or bugs please raise
-an [issue](https://github.com/tuuhin/BTAndroidApp/issues/new)
+- [AGENTS.md](AGENTS.md)
+- [docs/TS18_DEVICE_CONTEXT.md](docs/TS18_DEVICE_CONTEXT.md)
+- [docs/BLUETOOTH_LANE_MODEL.md](docs/BLUETOOTH_LANE_MODEL.md)
+- [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md)
+- [docs/INSTALLATION_OPERATION_ROLLBACK.md](docs/INSTALLATION_OPERATION_ROLLBACK.md)
 
 ### :revolving_hearts: Special Thanks
 
-Special thanks two most used open sourced bluetooth terminal apps.
+Special thanks to [upstream/original Author](https://github.com/tuuhin/BTAndroidApp/issues/new)    ヾ(＠⌒ー⌒＠)ノ
 
-- [Nordic Semiconductor android app](https://github.com/NordicSemiconductor/Android-nRF-Connect)
-- [Simple Bluetooth termial](https://github.com/kai-morich/SimpleBluetoothTerminal)
+If you encounter any problems or bugs in the app, please raise an [issue](https://github.com/cbkii/BTAndroidTS/issues/new)

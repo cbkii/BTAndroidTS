@@ -15,4 +15,6 @@
 local.properties
 keystore.properties
 /.junie
+*/TS18diagnostics/*
+magisk/BTAndroidTS/system/priv-app/BTAndroidTS/*.apk
 /secrets/

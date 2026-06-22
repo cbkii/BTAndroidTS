@@ -1,0 +1,6 @@
+id=btandroidts
+name=BTAndroidTS Privileged
+version=18.0.0-alpha01
+versionCode=180001
+author=cbkii
+description=Systemless privileged placement for BTAndroidTS on TS18. Installs only the app and BLUETOOTH_PRIVILEGED allowlist; does not replace Bluetooth stack, HAL, firmware, or Topway services.

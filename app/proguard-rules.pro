@@ -17,6 +17,22 @@
 #-keepattributes SourceFile,LineNumberTable
 -shrinkunusedprotofields
 
+# HID Host on Android 10 is accessed through an API-gated reflection adapter. Keep only the
+# platform profile members the adapter probes; do not keep app packages broadly.
+-dontwarn android.bluetooth.BluetoothHidHost
+-keepclassmembers class android.bluetooth.BluetoothHidHost {
+    public boolean connect(android.bluetooth.BluetoothDevice);
+    public boolean disconnect(android.bluetooth.BluetoothDevice);
+    public java.util.List getConnectedDevices();
+    public int getConnectionState(android.bluetooth.BluetoothDevice);
+    public boolean setConnectionPolicy(android.bluetooth.BluetoothDevice,int);
+    public boolean setPriority(android.bluetooth.BluetoothDevice,int);
+}
+
+-keepclassmembers class android.bluetooth.BluetoothProfile {
+    public static final int HID_HOST;
+}
+
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
