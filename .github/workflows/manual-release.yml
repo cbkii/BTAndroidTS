@@ -288,7 +288,7 @@ jobs:
             exit 1
           fi
           # scripts/package-magisk.sh now calls validation internally
-          sh scripts/package-magisk.sh "${apk_candidates[0]}" "release"
+          bash scripts/package-magisk.sh "${apk_candidates[0]}" "release"
           unzip -t build/BTAndroidTS-release-magisk.zip >/dev/null
           echo "magisk_zip=build/BTAndroidTS-release-magisk.zip" >> "$GITHUB_OUTPUT"
 

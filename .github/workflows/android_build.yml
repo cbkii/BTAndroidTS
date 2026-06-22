@@ -145,7 +145,7 @@ jobs:
             exit 1
           fi
           # Use the latest built APK. scripts/package-magisk.sh now calls validation internally.
-          sh scripts/package-magisk.sh "${apk_candidates[-1]}" "debug-ci"
+          bash scripts/package-magisk.sh "${apk_candidates[-1]}" "debug-ci"
           echo "magisk_zip=build/BTAndroidTS-debug-ci-magisk.zip" >> "$GITHUB_OUTPUT"
 
       - name: Upload build reports

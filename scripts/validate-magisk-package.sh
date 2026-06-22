@@ -1,79 +1,101 @@
-#!/usr/bin/env sh
-# validate-magisk-package.sh [expected_package_name]
-set -eu
+#!/usr/bin/env bash
+# validate-magisk-package.sh [expected_package_name] [module_dir]
+set -euo pipefail
 
 EXPECTED_PKG="${1:-com.cbkii.btandroidts}"
-MODULE_DIR="magisk/BTAndroidTS"
-ALLOWLIST="$MODULE_DIR/system/etc/permissions/privapp-permissions-com.cbkii.btandroidts.xml"
-APK="$MODULE_DIR/system/priv-app/BTAndroidTS/BTAndroidTS.apk"
-PROP_FILE="$MODULE_DIR/module.prop"
+MODULE_DIR="${2:-magisk/BTAndroidTS}"
+ALLOWLIST="${MODULE_DIR}/system/etc/permissions/privapp-permissions-com.cbkii.btandroidts.xml"
+APK="${MODULE_DIR}/system/priv-app/BTAndroidTS/BTAndroidTS.apk"
+PROP_FILE="${MODULE_DIR}/module.prop"
+SCRIPT_FILES=(
+  "${MODULE_DIR}/post-fs-data.sh"
+  "${MODULE_DIR}/service.sh"
+  "${MODULE_DIR}/customize.sh"
+)
+TEXT_FILES=(
+  "${PROP_FILE}"
+  "${ALLOWLIST}"
+  "${SCRIPT_FILES[@]}"
+)
 
-echo "Validating Magisk module at $MODULE_DIR"
+printf 'Validating Magisk module at %s\n' "${MODULE_DIR}"
 
-# 1. Essential files
-for f in "$PROP_FILE" "$MODULE_DIR/post-fs-data.sh" "$MODULE_DIR/service.sh" "$MODULE_DIR/customize.sh" "$ALLOWLIST" "$APK"; do
-  if [ ! -f "$f" ]; then
-    echo "::error::Missing file: $f" >&2
-    exit 1
+required_files=(
+  "${PROP_FILE}"
+  "${ALLOWLIST}"
+  "${APK}"
+  "${SCRIPT_FILES[@]}"
+)
+for f in "${required_files[@]}"; do
+  if [[ ! -f "${f}" ]]; then
+    printf '::error::Missing file: %s\n' "${f}" >&2
+    return 1
   fi
 done
 
-# 2. Line endings (must be LF)
 CR="$(printf '\r')"
-if grep -Iq "$CR" "$PROP_FILE" "$MODULE_DIR/post-fs-data.sh" "$MODULE_DIR/service.sh" "$MODULE_DIR/customize.sh" "$ALLOWLIST"; then
-  echo "::error::CRLF line endings detected in module files. Only LF is allowed." >&2
-  exit 1
+for f in "${TEXT_FILES[@]}"; do
+  if grep -Iq "${CR}" "${f}"; then
+    printf '::error::CRLF line endings detected in module file: %s\n' "${f}" >&2
+    return 1
+  fi
+done
+
+if ! grep -q '^id=btandroidts$' "${PROP_FILE}"; then
+  printf '::error::module.prop: id must be '\''btandroidts'\''\n' >&2
+  return 1
+fi
+if ! grep -q '^name=' "${PROP_FILE}"; then
+  printf '::error::module.prop: missing name\n' >&2
+  return 1
+fi
+if ! grep -q '^version=' "${PROP_FILE}"; then
+  printf '::error::module.prop: missing version\n' >&2
+  return 1
+fi
+if ! grep -q '^versionCode=[0-9]\+$' "${PROP_FILE}"; then
+  printf '::error::module.prop: invalid or missing versionCode\n' >&2
+  return 1
 fi
 
-# 3. module.prop validation
-if ! grep -q "^id=btandroidts$" "$PROP_FILE"; then
-  echo "::error::module.prop: id must be 'btandroidts'" >&2
-  exit 1
-fi
-if ! grep -q "^name=" "$PROP_FILE"; then
-  echo "::error::module.prop: missing name" >&2
-  exit 1
-fi
-if ! grep -q "^version=" "$PROP_FILE"; then
-  echo "::error::module.prop: missing version" >&2
-  exit 1
-fi
-if ! grep -q "^versionCode=[0-9]\+$" "$PROP_FILE"; then
-  echo "::error::module.prop: invalid or missing versionCode" >&2
-  exit 1
+if ! grep -q "package=\"${EXPECTED_PKG}\"" "${ALLOWLIST}"; then
+  printf '::error::Allowlist package mismatch. Expected: %s\n' "${EXPECTED_PKG}" >&2
+  grep 'package=' "${ALLOWLIST}" || true
+  return 1
 fi
 
-# 4. Privapp allowlist validation
-# It must match the expected package (from aapt or default)
-if ! grep -q "package=\"$EXPECTED_PKG\"" "$ALLOWLIST"; then
-  echo "::error::Allowlist package mismatch. Expected: $EXPECTED_PKG" >&2
-  grep "package=" "$ALLOWLIST" || true
-  exit 1
+if ! grep -q 'android.permission.BLUETOOTH_PRIVILEGED' "${ALLOWLIST}"; then
+  printf '::error::Allowlist missing BLUETOOTH_PRIVILEGED\n' >&2
+  return 1
 fi
 
-if ! grep -q 'android.permission.BLUETOOTH_PRIVILEGED' "$ALLOWLIST"; then
-  echo "::error::Allowlist missing BLUETOOTH_PRIVILEGED" >&2
-  exit 1
+if grep -Eq 'android.permission.BLUETOOTH_STACK|android.uid.system|sharedUserId' "${ALLOWLIST}"; then
+  printf '::error::Unsafe privilege found in privapp allowlist\n' >&2
+  return 1
 fi
 
-# 5. Safety checks (block dangerous permissions/directives)
-if grep -q 'android.permission.BLUETOOTH_STACK\|android.uid.system\|sharedUserId' "$ALLOWLIST"; then
-  echo "::error::Unsafe privilege found in privapp allowlist" >&2
-  exit 1
+PERM_COUNT="$(awk '{ count += gsub(/<permission[[:space:]]/, "&") } END { print count + 0 }' "${ALLOWLIST}")"
+if [[ "${PERM_COUNT}" -ne 1 ]]; then
+  printf '::error::Privapp allowlist grants an unexpected number of permissions (%s). Expected: 1\n' "${PERM_COUNT}" >&2
+  return 1
+fi
+PERMISSION_NAME="$(awk -F'"' '/<permission[[:space:]]/{print $2; return}' "${ALLOWLIST}")"
+if [[ "${PERMISSION_NAME}" != "android.permission.BLUETOOTH_PRIVILEGED" ]]; then
+  printf '::error::Unexpected privapp permission: %s\n' "${PERMISSION_NAME}" >&2
+  return 1
 fi
 
-# Limit to only intended permissions
-PERM_COUNT=$(grep -c '<permission ' "$ALLOWLIST")
-if [ "$PERM_COUNT" -ne 1 ]; then
-  # For now, we only expect BLUETOOTH_PRIVILEGED
-  echo "::error::Privapp allowlist grants an unexpected number of permissions ($PERM_COUNT). Expected: 1" >&2
-  exit 1
-fi
+extra_text_files=(
+  "${MODULE_DIR}/META-INF/com/google/android/update-binary"
+  "${MODULE_DIR}/META-INF/com/google/android/updater-script"
+)
+DANGEROUS_DIRECTIVE_RE='android\.permission\.BLUETOOTH_STACK|android\.uid\.system|sharedUserId|(^|[[:space:]])setenforce([[:space:]]|$)|(^|[[:space:]])mount[[:space:]].*-o[[:space:]]*([^[:space:]]*,)*rw(,|[[:space:]]|$)|pm[[:space:]]+clear[[:space:]]+com\.android\.bluetooth'
 
-# Scan all scripts for dangerous commands
-if grep -R -q 'BLUETOOTH_STACK\|android.uid.system\|sharedUserId\|setenforce\|mount -o rw\|pm clear com.android.bluetooth' "$MODULE_DIR"; then
-  echo "::error::Unsafe privileged-module directive found in scripts" >&2
-  exit 1
-fi
+for f in "${TEXT_FILES[@]}" "${extra_text_files[@]}"; do
+  if [[ -f "${f}" ]] && grep -Eq "${DANGEROUS_DIRECTIVE_RE}" "${f}"; then
+    printf '::error::Unsafe privileged-module directive found in %s\n' "${f}" >&2
+    return 1
+  fi
+done
 
-echo "BTAndroidTS Magisk module validation passed for package: $EXPECTED_PKG"
+printf 'BTAndroidTS Magisk module validation passed for package: %s\n' "${EXPECTED_PKG}"
