@@ -54,21 +54,15 @@ find_aapt() {
     [[ -n "${sdk_root}" ]] || continue
     add_checked_path "${sdk_root}/build-tools/*/aapt"
     if [[ -d "${sdk_root}/build-tools" ]]; then
-      local candidates=("${sdk_root}"/build-tools/*/aapt)
-      local latest=""
-      for candidate in "${candidates[@]}"; do
-        if [[ -x "${candidate}" ]]; then
-          latest="${candidate}"
-        fi
-      done
-      if [[ -n "${latest}" ]]; then
-        AAPT_BIN="${latest}"
+      candidate="$(find "${sdk_root}/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt -perm -111 2>/dev/null | sort -V | tail -n 1 || true)"
+      if [[ -n "${candidate}" ]]; then
+        AAPT_BIN="${candidate}"
         return 0
       fi
     fi
   done
 
-  false
+  return 1
 }
 
 extract_package_name() {
@@ -148,9 +142,8 @@ text = path.read_text(encoding='utf-8')
 needle = f'package="{old}"'
 replacement = f'package="{new}"'
 if needle not in text:
-    raise SystemExit(f'Package marker not found: {needle}')
-with path.open('w', encoding='utf-8', newline='\n') as f:
-    f.write(text.replace(needle, replacement, 1))
+    sys.exit(f'Package marker not found: {needle}')
+path.write_text(text.replace(needle, replacement, 1), encoding='utf-8', newline='\n')
 PY
 fi
 

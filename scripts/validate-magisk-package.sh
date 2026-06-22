@@ -16,8 +16,6 @@ TEXT_FILES=(
   "${PROP_FILE}"
   "${ALLOWLIST}"
   "${SCRIPT_FILES[@]}"
-  "${MODULE_DIR}/META-INF/com/google/android/update-binary"
-  "${MODULE_DIR}/META-INF/com/google/android/updater-script"
 )
 
 printf 'Validating Magisk module at %s\n' "${MODULE_DIR}"
@@ -81,15 +79,19 @@ if [[ "${PERM_COUNT}" -ne 1 ]]; then
   printf '::error::Privapp allowlist grants an unexpected number of permissions (%s). Expected: 1\n' "${PERM_COUNT}" >&2
   exit 1
 fi
-PERMISSION_NAME="$(sed -n 's/.*<permission[^>]* name="\([^"]*\)".*/\1/p' "${ALLOWLIST}" | head -n 1)"
+PERMISSION_NAME="$(awk -F'"' '/<permission[[:space:]]/{print $2; exit}' "${ALLOWLIST}")"
 if [[ "${PERMISSION_NAME}" != "android.permission.BLUETOOTH_PRIVILEGED" ]]; then
   printf '::error::Unexpected privapp permission: %s\n' "${PERMISSION_NAME}" >&2
   exit 1
 fi
 
+extra_text_files=(
+  "${MODULE_DIR}/META-INF/com/google/android/update-binary"
+  "${MODULE_DIR}/META-INF/com/google/android/updater-script"
+)
 DANGEROUS_DIRECTIVE_RE='android\.permission\.BLUETOOTH_STACK|android\.uid\.system|sharedUserId|(^|[[:space:]])setenforce([[:space:]]|$)|(^|[[:space:]])mount[[:space:]].*-o[[:space:]]*([^[:space:]]*,)*rw(,|[[:space:]]|$)|pm[[:space:]]+clear[[:space:]]+com\.android\.bluetooth'
 
-for f in "${TEXT_FILES[@]}"; do
+for f in "${TEXT_FILES[@]}" "${extra_text_files[@]}"; do
   if [[ -f "${f}" ]] && grep -Eq "${DANGEROUS_DIRECTIVE_RE}" "${f}"; then
     printf '::error::Unsafe privileged-module directive found in %s\n' "${f}" >&2
     exit 1
