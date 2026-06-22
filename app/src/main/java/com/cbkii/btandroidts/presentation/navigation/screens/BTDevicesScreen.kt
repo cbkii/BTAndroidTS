@@ -45,7 +45,7 @@ import com.ramcosta.composedestinations.generated.destinations.BleServerRouteDes
 import com.ramcosta.composedestinations.generated.destinations.BtProfileDestination
 import com.ramcosta.composedestinations.generated.destinations.BtServerRouteDestination
 import com.ramcosta.composedestinations.generated.destinations.InfoDestination
-import com.ramcosta.composedestinations.generated.destinations.KeyboardTestScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.KeyboardTestDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
@@ -151,7 +151,7 @@ fun AnimatedVisibilityScope.BTDevicesScreen(
 						Ts18DashboardAction.SUPERVISION -> viewModel.onEvents(BTDevicesScreenEvents.ManualSupervisorRetry)
 						Ts18DashboardAction.DIAGNOSTICS -> viewModel.onEvents(BTDevicesScreenEvents.ExportDiagnostics)
 						Ts18DashboardAction.ADVANCED_TOOLS -> viewModel.onEvents(BTDevicesScreenEvents.ShowAdvancedTools)
-						Ts18DashboardAction.KEYBOARD_TEST -> navigator.navigate(KeyboardTestScreenDestination)
+						Ts18DashboardAction.KEYBOARD_TEST -> navigator.navigate(KeyboardTestDestination)
 					}
 				},
 				navigation = {
