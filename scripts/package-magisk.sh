@@ -54,44 +54,50 @@ find_aapt() {
     [[ -n "${sdk_root}" ]] || continue
     add_checked_path "${sdk_root}/build-tools/*/aapt"
     if [[ -d "${sdk_root}/build-tools" ]]; then
-      candidate="$(find "${sdk_root}/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt -perm -111 2>/dev/null | sort -V | tail -n 1 || true)"
-      if [[ -n "${candidate}" ]]; then
-        AAPT_BIN="${candidate}"
+      local candidates=("${sdk_root}"/build-tools/*/aapt)
+      local latest=""
+      for candidate in "${candidates[@]}"; do
+        if [[ -x "${candidate}" ]]; then
+          latest="${candidate}"
+        fi
+      done
+      if [[ -n "${latest}" ]]; then
+        AAPT_BIN="${latest}"
         return 0
       fi
     fi
   done
 
-  return 1
+  false
 }
 
 extract_package_name() {
   local apk="$1"
-  "${AAPT_BIN}" dump badging "${apk}" | awk -F"'" '/^package: name=/{print $2; return}'
+  "${AAPT_BIN}" dump badging "${apk}" | awk -F"'" '/^package: name=/{print $2; exit}'
 }
 
 cleanup() {
   rm -rf "${STAGE_ROOT}"
 }
 trap cleanup EXIT
-trap 'return 1' HUP INT TERM
+trap 'exit 1' HUP INT TERM
 
 printf '%s\n' '--- BTAndroidTS Magisk Packaging ---'
 printf 'Source APK: %s\n' "${APK_PATH}"
 
 if [[ ! -f "${APK_PATH}" ]]; then
   printf '::error::Source APK not found: %s\n' "${APK_PATH}" >&2
-  return 1
+  exit 1
 fi
 if [[ ! -d "${SOURCE_MODULE_DIR}" ]]; then
   printf '::error::Source Magisk module not found: %s\n' "${SOURCE_MODULE_DIR}" >&2
-  return 1
+  exit 1
 fi
 
 if ! find_aapt; then
   printf '::error::aapt not found. Checked paths:\n' >&2
   printf '::error::  %s\n' "${checked_aapt_paths[@]}" >&2
-  return 1
+  exit 1
 fi
 printf 'Using aapt: %s\n' "${AAPT_BIN}"
 
@@ -109,13 +115,13 @@ cp "${APK_PATH}" "${DEST_APK}"
 
 if [[ ! -f "${ALLOWLIST}" ]]; then
   printf '::error::Privapp allowlist not found in staged module: %s\n' "${ALLOWLIST}" >&2
-  return 1
+  exit 1
 fi
 
 PKG_NAME="$(extract_package_name "${DEST_APK}")"
 if [[ -z "${PKG_NAME}" ]]; then
   printf '::error::Failed to extract package name from APK with aapt: %s\n' "${DEST_APK}" >&2
-  return 1
+  exit 1
 fi
 printf 'Detected package: %s\n' "${PKG_NAME}"
 
@@ -124,10 +130,10 @@ if [[ "${PKG_NAME}" == *.debug ]]; then
   IS_DEBUG=true
 fi
 
-ORIG_ALLOWLIST_PKG="$(awk -F'"' '/<privapp-permissions package=/{print $2; return}' "${ALLOWLIST}")"
+ORIG_ALLOWLIST_PKG="$(awk -F'"' '/<privapp-permissions package=/{print $2; exit}' "${ALLOWLIST}")"
 if [[ -z "${ORIG_ALLOWLIST_PKG}" ]]; then
   printf '::error::Failed to read package name from staged allowlist: %s\n' "${ALLOWLIST}" >&2
-  return 1
+  exit 1
 fi
 
 if [[ "${PKG_NAME}" != "${ORIG_ALLOWLIST_PKG}" ]]; then
@@ -142,8 +148,9 @@ text = path.read_text(encoding='utf-8')
 needle = f'package="{old}"'
 replacement = f'package="{new}"'
 if needle not in text:
-    sys.exit(f'Package marker not found: {needle}')
-path.write_text(text.replace(needle, replacement, 1), encoding='utf-8', newline='\n')
+    raise SystemExit(f'Package marker not found: {needle}')
+with path.open('w', encoding='utf-8', newline='\n') as f:
+    f.write(text.replace(needle, replacement, 1))
 PY
 fi
 
