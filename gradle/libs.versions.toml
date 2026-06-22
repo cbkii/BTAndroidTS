@@ -73,6 +73,7 @@ protobuf-protoc-gen-javalite = { module = "com.google.protobuf:protoc-gen-javali
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 
 [plugins]
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 google_devtools_ksp = { id = "com.google.devtools.ksp", version.ref = "ksp_version" }

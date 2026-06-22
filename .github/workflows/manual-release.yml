@@ -37,9 +37,9 @@ jobs:
     env:
       JAVA_VERSION: '21'
       JAVA_DISTRIBUTION: temurin
-      ANDROID_COMPILE_SDK: '36'
+      ANDROID_COMPILE_SDK: '35'
       ANDROID_MIN_SDK: '29'
-      ANDROID_BUILD_TOOLS: '36.0.0'
+      ANDROID_BUILD_TOOLS: '35.0.0'
       REQUIRES_NINJA: 'true'
 
     steps:
@@ -90,7 +90,26 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
         with:
-          packages: platform-tools build-tools;${{ env.ANDROID_BUILD_TOOLS }} platforms;android-${{ env.ANDROID_COMPILE_SDK }}
+          # setup-android handles commandline-tools bootstrap and license acceptance.
+          # Install explicit platform/build-tool packages in the next shell step so each
+          # sdkmanager package is passed as its own argument, not as one newline-joined input.
+          packages: ''
+
+      - name: Install required Android SDK components
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
+            exit 1
+          fi
+          sdkmanager --install \
+            'platform-tools' \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platforms;android-${ANDROID_COMPILE_SDK}"
+          printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
+          echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
 
       - name: Verify Android SDK tooling
         shell: bash
@@ -254,13 +273,18 @@ jobs:
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
-          if git diff --quiet -- app/build.gradle.kts; then
+          if [[ ! -f magisk/BTAndroidTS/module.prop ]]; then
+            echo "::error::Missing required version metadata file: magisk/BTAndroidTS/module.prop"
+            exit 1
+          fi
+          version_files=(app/build.gradle.kts magisk/BTAndroidTS/module.prop)
+          if git diff --quiet -- "${version_files[@]}"; then
             echo "::error::Version metadata did not change; refusing to continue."
             exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/build.gradle.kts
+          git add -- "${version_files[@]}"
           git commit -m "chore(release): prepare ${RELEASE_TAG}"
           echo "release_commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
