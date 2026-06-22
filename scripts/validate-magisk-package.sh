@@ -54,7 +54,7 @@ if ! grep -q 'android.permission.BLUETOOTH_PRIVILEGED' "$ALLOWLIST"; then
   exit 1
 fi
 
-if grep -q 'android.permission.BLUETOOTH_STACK\|android.uid.system\|sharedUserId' "$ALLOWLIST"; then
+if grep -Eq 'android.permission.BLUETOOTH_STACK|android.uid.system|sharedUserId' "$ALLOWLIST"; then
   echo "::error::Unsafe privilege found in privapp allowlist" >&2
   exit 1
 fi

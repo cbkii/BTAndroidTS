@@ -23,7 +23,8 @@ cleanup() {
     fi
   fi
 }
-trap cleanup EXIT HUP INT TERM
+trap 'exit 1' HUP INT TERM
+trap cleanup EXIT
 
 echo "--- BTAndroidTS Magisk Packaging ---"
 echo "Source APK: $APK_PATH"
@@ -51,7 +52,7 @@ if ! command -v "$AAPT_BIN" >/dev/null 2>&1; then
   fi
 fi
 
-PKG_NAME="$($AAPT_BIN dump badging "$DEST_APK" | sed -n "s/package: name='\([^']*\)'.*/\1/p")"
+PKG_NAME="$(\"$AAPT_BIN\" dump badging \"$DEST_APK\" | sed -n \"s/package: name='\\([^']*\\)'.*/\\1/p\")"
 if [ -z "$PKG_NAME" ]; then
   echo "::error::Failed to extract package name from APK" >&2
   exit 1
@@ -88,8 +89,7 @@ sh scripts/validate-magisk-package.sh "$PKG_NAME"
 
 rm -f "$ZIP_PATH"
 (
-  cd "$MODULE_DIR"
-  zip -q -r -9 "../../$ZIP_PATH" .
+  cd "$MODULE_DIR" && zip -q -r -9 "../../$ZIP_PATH" .
 )
 
 RESTORE_ALLOWLIST=false
