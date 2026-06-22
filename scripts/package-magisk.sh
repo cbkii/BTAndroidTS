@@ -68,7 +68,7 @@ find_aapt() {
     fi
   done
 
-  return 1
+  false
 }
 
 extract_package_name() {
