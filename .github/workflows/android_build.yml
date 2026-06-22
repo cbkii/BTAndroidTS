@@ -72,11 +72,6 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
-        with:
-          # setup-android handles commandline-tools bootstrap and license acceptance.
-          # Install explicit platform/build-tool packages in the next shell step so each
-          # sdkmanager package is passed as its own argument, not as one newline-joined input.
-          packages: ''
 
       - name: Install required Android SDK components
         shell: bash
@@ -152,7 +147,7 @@ jobs:
             exit 1
           fi
           # Use the latest built APK. scripts/package-magisk.sh now calls validation internally.
-          sh scripts/package-magisk.sh "${apk_candidates[-1]}" "debug-ci"
+          bash scripts/package-magisk.sh "${apk_candidates[-1]}" "debug-ci"
           echo "magisk_zip=build/BTAndroidTS-debug-ci-magisk.zip" >> "$GITHUB_OUTPUT"
 
       - name: Upload build reports

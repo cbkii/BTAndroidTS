@@ -1,102 +1,165 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 # package-magisk.sh <apk_path> [zip_suffix]
-set -eu
+set -euo pipefail
 
 APK_PATH="${1:-app/build/outputs/apk/ts18Privileged/release/app-ts18Privileged-release.apk}"
 ZIP_SUFFIX="${2:-}"
 MODULE_ID="BTAndroidTS"
-MODULE_ROOT="magisk"
-MODULE_DIR="$MODULE_ROOT/$MODULE_ID"
-DEST_DIR="$MODULE_DIR/system/priv-app/BTAndroidTS"
-DEST_APK="$DEST_DIR/BTAndroidTS.apk"
+SOURCE_MODULE_DIR="magisk/${MODULE_ID}"
 BUILD_DIR="build"
-ALLOWLIST="$MODULE_DIR/system/etc/permissions/privapp-permissions-com.cbkii.btandroidts.xml"
-ORIG_ALLOWLIST_PKG=""
-RESTORE_ALLOWLIST=false
+STAGE_ROOT="${BUILD_DIR}/magisk-stage"
+STAGE_MODULE_DIR="${STAGE_ROOT}/${MODULE_ID}"
+DEST_DIR="${STAGE_MODULE_DIR}/system/priv-app/BTAndroidTS"
+DEST_APK="${DEST_DIR}/BTAndroidTS.apk"
+ALLOWLIST_REL="system/etc/permissions/privapp-permissions-com.cbkii.btandroidts.xml"
+ALLOWLIST="${STAGE_MODULE_DIR}/${ALLOWLIST_REL}"
+AAPT_BIN=""
 
-cleanup() {
-  if [ "$RESTORE_ALLOWLIST" = "true" ] && [ -n "$ORIG_ALLOWLIST_PKG" ] && [ -f "$ALLOWLIST" ]; then
-    current_pkg=$(sed -n 's/.*<privapp-permissions package="\([^"]*\)">.*/\1/p' "$ALLOWLIST" | head -n 1 || true)
-    if [ -n "$current_pkg" ] && [ "$current_pkg" != "$ORIG_ALLOWLIST_PKG" ]; then
-      echo "Restoring allowlist package to $ORIG_ALLOWLIST_PKG"
-      sed -i "s/package=\"$current_pkg\"/package=\"$ORIG_ALLOWLIST_PKG\"/" "$ALLOWLIST"
+checked_aapt_paths=()
+
+add_checked_path() {
+  checked_aapt_paths+=("$1")
+}
+
+find_aapt() {
+  local candidate=""
+
+  if [[ -n "${ANDROID_HOME:-}" && -n "${ANDROID_BUILD_TOOLS:-}" ]]; then
+    candidate="${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
+    add_checked_path "${candidate}"
+    if [[ -x "${candidate}" ]]; then
+      AAPT_BIN="${candidate}"
+      return 0
     fi
   fi
-}
-trap 'exit 1' HUP INT TERM
-trap cleanup EXIT
 
-echo "--- BTAndroidTS Magisk Packaging ---"
-echo "Source APK: $APK_PATH"
-
-if [ ! -f "$APK_PATH" ]; then
-  echo "::error::Source APK not found: $APK_PATH" >&2
-  exit 1
-fi
-if [ ! -f "$ALLOWLIST" ]; then
-  echo "::error::Privapp allowlist not found: $ALLOWLIST" >&2
-  exit 1
-fi
-
-rm -f "$DEST_APK"
-mkdir -p "$DEST_DIR" "$BUILD_DIR"
-cp "$APK_PATH" "$DEST_APK"
-
-AAPT_BIN="aapt"
-if ! command -v "$AAPT_BIN" >/dev/null 2>&1; then
-  SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/opt/android-sdk}}"
-  AAPT_BIN="$(find "$SDK_ROOT/build-tools" -name aapt -type f 2>/dev/null | sort | tail -n 1 || true)"
-  if [ -z "$AAPT_BIN" ]; then
-    echo "::error::aapt not found in PATH or $SDK_ROOT/build-tools" >&2
-    exit 1
+  if [[ -n "${ANDROID_SDK_ROOT:-}" && -n "${ANDROID_BUILD_TOOLS:-}" ]]; then
+    candidate="${ANDROID_SDK_ROOT}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
+    add_checked_path "${candidate}"
+    if [[ -x "${candidate}" ]]; then
+      AAPT_BIN="${candidate}"
+      return 0
+    fi
   fi
-fi
 
-PKG_NAME="$(\"$AAPT_BIN\" dump badging \"$DEST_APK\" | sed -n \"s/package: name='\\([^']*\\)'.*/\\1/p\")"
-if [ -z "$PKG_NAME" ]; then
-  echo "::error::Failed to extract package name from APK" >&2
+  if candidate="$(command -v aapt 2>/dev/null)" && [[ -n "${candidate}" ]]; then
+    add_checked_path "PATH:${candidate}"
+    AAPT_BIN="${candidate}"
+    return 0
+  fi
+  add_checked_path "PATH:aapt"
+
+  local sdk_root=""
+  for sdk_root in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" /opt/android-sdk; do
+    [[ -n "${sdk_root}" ]] || continue
+    add_checked_path "${sdk_root}/build-tools/*/aapt"
+    if [[ -d "${sdk_root}/build-tools" ]]; then
+      candidate="$(find "${sdk_root}/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt -perm -111 2>/dev/null | sort -V | tail -n 1 || true)"
+      if [[ -n "${candidate}" ]]; then
+        AAPT_BIN="${candidate}"
+        return 0
+      fi
+    fi
+  done
+
+  return 1
+}
+
+extract_package_name() {
+  local apk="$1"
+  "${AAPT_BIN}" dump badging "${apk}" | awk -F"'" '/^package: name=/{print $2; exit}'
+}
+
+cleanup() {
+  rm -rf "${STAGE_ROOT}"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+printf '%s\n' '--- BTAndroidTS Magisk Packaging ---'
+printf 'Source APK: %s\n' "${APK_PATH}"
+
+if [[ ! -f "${APK_PATH}" ]]; then
+  printf '::error::Source APK not found: %s\n' "${APK_PATH}" >&2
   exit 1
 fi
-echo "Detected package: $PKG_NAME"
+if [[ ! -d "${SOURCE_MODULE_DIR}" ]]; then
+  printf '::error::Source Magisk module not found: %s\n' "${SOURCE_MODULE_DIR}" >&2
+  exit 1
+fi
+
+if ! find_aapt; then
+  printf '::error::aapt not found. Checked paths:\n' >&2
+  printf '::error::  %s\n' "${checked_aapt_paths[@]}" >&2
+  exit 1
+fi
+printf 'Using aapt: %s\n' "${AAPT_BIN}"
+
+if [[ -z "${ZIP_SUFFIX}" ]]; then
+  ZIP_SUFFIX="release"
+fi
+ZIP_PATH="${BUILD_DIR}/BTAndroidTS-${ZIP_SUFFIX}-magisk.zip"
+
+rm -rf "${STAGE_ROOT}"
+mkdir -p "${STAGE_ROOT}" "${DEST_DIR}" "${BUILD_DIR}"
+cp -a "${SOURCE_MODULE_DIR}" "${STAGE_ROOT}/"
+rm -f "${DEST_APK}"
+mkdir -p "${DEST_DIR}"
+cp "${APK_PATH}" "${DEST_APK}"
+
+if [[ ! -f "${ALLOWLIST}" ]]; then
+  printf '::error::Privapp allowlist not found in staged module: %s\n' "${ALLOWLIST}" >&2
+  exit 1
+fi
+
+PKG_NAME="$(extract_package_name "${DEST_APK}")"
+if [[ -z "${PKG_NAME}" ]]; then
+  printf '::error::Failed to extract package name from APK with aapt: %s\n' "${DEST_APK}" >&2
+  exit 1
+fi
+printf 'Detected package: %s\n' "${PKG_NAME}"
 
 IS_DEBUG=false
-case "$PKG_NAME" in
-  *.debug) IS_DEBUG=true ;;
-esac
+if [[ "${PKG_NAME}" == *.debug ]]; then
+  IS_DEBUG=true
+fi
 
-ORIG_ALLOWLIST_PKG=$(sed -n 's/.*<privapp-permissions package="\([^"]*\)">.*/\1/p' "$ALLOWLIST" | head -n 1 || true)
-if [ -z "$ORIG_ALLOWLIST_PKG" ]; then
-  echo "::error::Failed to read package name from allowlist: $ALLOWLIST" >&2
+ORIG_ALLOWLIST_PKG="$(awk -F'"' '/<privapp-permissions package=/{print $2; exit}' "${ALLOWLIST}")"
+if [[ -z "${ORIG_ALLOWLIST_PKG}" ]]; then
+  printf '::error::Failed to read package name from staged allowlist: %s\n' "${ALLOWLIST}" >&2
   exit 1
 fi
 
-if [ "$PKG_NAME" != "$ORIG_ALLOWLIST_PKG" ]; then
-  echo "Patching allowlist package from $ORIG_ALLOWLIST_PKG to $PKG_NAME"
-  sed -i "s/package=\"$ORIG_ALLOWLIST_PKG\"/package=\"$PKG_NAME\"/" "$ALLOWLIST"
-  RESTORE_ALLOWLIST=true
+if [[ "${PKG_NAME}" != "${ORIG_ALLOWLIST_PKG}" ]]; then
+  printf 'Patching staged allowlist package from %s to %s\n' "${ORIG_ALLOWLIST_PKG}" "${PKG_NAME}"
+  python3 - "${ALLOWLIST}" "${ORIG_ALLOWLIST_PKG}" "${PKG_NAME}" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+old = sys.argv[2]
+new = sys.argv[3]
+text = path.read_text(encoding='utf-8')
+needle = f'package="{old}"'
+replacement = f'package="{new}"'
+if needle not in text:
+    raise SystemExit(f'Package marker not found: {needle}')
+path.write_text(text.replace(needle, replacement, 1), encoding='utf-8', newline='\n')
+PY
 fi
 
-if [ -z "$ZIP_SUFFIX" ]; then
-  if [ "$IS_DEBUG" = "true" ]; then
-    ZIP_SUFFIX="debug"
-  else
-    ZIP_SUFFIX="release"
-  fi
-fi
-ZIP_PATH="$BUILD_DIR/BTAndroidTS-$ZIP_SUFFIX-magisk.zip"
+bash scripts/validate-magisk-package.sh "${PKG_NAME}" "${STAGE_MODULE_DIR}"
 
-sh scripts/validate-magisk-package.sh "$PKG_NAME"
-
-rm -f "$ZIP_PATH"
+rm -f "${ZIP_PATH}"
 (
-  cd "$MODULE_DIR" && zip -q -r -9 "../../$ZIP_PATH" .
+  cd "${STAGE_MODULE_DIR}"
+  zip -q -r -9 "../../BTAndroidTS-${ZIP_SUFFIX}-magisk.zip" .
 )
 
-RESTORE_ALLOWLIST=false
-cleanup
+test -f "${ZIP_PATH}"
 trap - EXIT HUP INT TERM
 
-echo "ZIP Path: $ZIP_PATH"
-echo "Package: $PKG_NAME"
-echo "Debug: $IS_DEBUG"
-echo "-------------------------------------"
+printf 'ZIP Path: %s\n' "${ZIP_PATH}"
+printf 'Staged Module: %s\n' "${STAGE_MODULE_DIR}"
+printf 'Package: %s\n' "${PKG_NAME}"
+printf 'Debug: %s\n' "${IS_DEBUG}"
+printf '%s\n' '-------------------------------------'

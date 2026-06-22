@@ -26,14 +26,15 @@ Build the privileged APK, place it in the module, then zip the module outside so
 
 ```bash
 ./gradlew assembleTs18PrivilegedRelease
-sh scripts/package-magisk.sh
-sh scripts/validate-magisk-package.sh
+bash scripts/package-magisk.sh
+bash scripts/validate-magisk-package.sh com.cbkii.btandroidts build/magisk-stage/BTAndroidTS
 ```
 
-The packaging script copies
-`app/build/outputs/apk/ts18Privileged/release/app-ts18Privileged-release.apk` to
-`magisk/BTAndroidTS/system/priv-app/BTAndroidTS/BTAndroidTS.apk`, validates the package name and
-allowlist, and creates `build/BTAndroidTS-magisk.zip`.
+The packaging script stages the source module under `build/magisk-stage/BTAndroidTS`, copies
+`app/build/outputs/apk/ts18Privileged/release/app-ts18Privileged-release.apk` to the staged
+`system/priv-app/BTAndroidTS/BTAndroidTS.apk`, validates the package name and allowlist, and
+creates `build/BTAndroidTS-release-magisk.zip`. The tracked `magisk/BTAndroidTS` template remains
+unchanged, including when debug packages require a temporary `.debug` allowlist package in staging.
 
 The module grants only `android.permission.BLUETOOTH_PRIVILEGED` through
 `system/etc/permissions/privapp-permissions-com.cbkii.btandroidts.xml`. It does not replace

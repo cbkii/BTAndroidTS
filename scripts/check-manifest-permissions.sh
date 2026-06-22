@@ -11,7 +11,7 @@ fi
 
 grep -q 'android.permission.BLUETOOTH_PRIVILEGED' "$PRIV_MANIFEST"
 
-if grep -R -q 'android.permission.BLUETOOTH_STACK\|android.uid.system\|sharedUserId' app/src/main app/src/ts18Privileged; then
+if rg -q 'android\.permission\.BLUETOOTH_STACK|android\.uid\.system|sharedUserId' app/src/main app/src/ts18Privileged; then
   echo "Excessive Bluetooth/system authority requested" >&2
   exit 1
 fi
