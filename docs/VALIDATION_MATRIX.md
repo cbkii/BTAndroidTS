@@ -20,9 +20,9 @@ new BTAndroidTS feature.
 | USB/storage baseline | Observed passed | FAT `usbdisk0` and `usbdisk1` mounted with `/storage/usbdiskN` app-facing paths. |
 | DocumentsUI absence baseline | Observed passed | `com.android.documentsui` was not found; external storage and media providers were present. |
 | Display/input baseline | Observed passed | 1280x720 physical, 1225x720 app area, stable content `[0,55]-[1225,720]`, raw touch 1024x600 scaled. |
-| Standard APK builds | Not tested | Code unchanged in this second pass; first-pass local build is repository validation, not exact-device runtime evidence. |
-| TS18 privileged APK builds | Not tested | Code unchanged in this second pass; privileged grant still needs on-device validation after systemless placement. |
-| Magisk ZIP structure | Not tested | Packaging script and validator are implemented; local/CI run required after `assembleTs18PrivilegedRelease`. |
+| Standard APK builds | Not tested | Build workflow is configured to assemble standard debug/release artifacts; local/CI result must be recorded for this change set. This is not exact-device runtime evidence. |
+| TS18 privileged APK builds | Not tested | Build workflow is configured to assemble privileged artifacts; privileged grant still needs on-device validation after systemless placement. |
+| Magisk ZIP structure | Not tested | Packaging script and validator are implemented; local/CI run required after a TS18 privileged APK is available. |
 | Classic discovery raw results | Requires device validation | Existing app has Classic scanning, but TS18 manager flow pending. |
 | BLE discovery raw results | Requires device validation | Existing app has BLE scanning, but non-connectable filtering must be corrected. |
 | Awaited bonding state machine | Not tested | Broadcast-waiting implementation exists; requires automated and TS18 runtime validation. |
@@ -35,7 +35,7 @@ new BTAndroidTS feature.
 | OPP stock delegation | Requires device validation | Stock `com.android.bluetooth` delegation is implemented; picker/destination/progress behavior is untested on TS18. |
 | Incoming OPP preserved | Requires device validation | Must not start a competing inbound server. |
 | Topway phone lane unaffected | Requires device validation | Includes HFP, A2DP, PBAP, TLink/ZLink checks. |
-| Safe mode disables experimental paths | Not tested | Policy default is safe mode enabled and supervisor skips hidden reconnects; UI controls and TS18 proof remain. |
+| Safe mode disables experimental paths | Not tested | Policy default is safe mode enabled and supervisor skips hidden reconnects; automated coverage, UI controls and TS18 proof remain. |
 | Diagnostics export | Not tested | Bounded local export implementation exists; local build and TS18 storage validation remain. |
 | USB export to `/storage/usbdiskN` | Requires device validation | Must handle absent DocumentsUI and media removal. |
 | UI stable within TS18 insets | Requires device validation | Stable content `[0,55]-[1225,720]`; avoid phone portrait assumptions. |
