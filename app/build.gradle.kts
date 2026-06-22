@@ -3,7 +3,6 @@ import java.util.Properties
 
 plugins {
 	alias(libs.plugins.android.application)
-	alias(libs.plugins.kotlin.android)
 	alias(libs.plugins.google.devtools.ksp)
 	alias(libs.plugins.kotlinx.serialization)
 	alias(libs.plugins.google.protobuf)
@@ -109,7 +108,7 @@ composeCompiler {
 //	featureFlags.add(ComposeFeatureFlag.OptimizeNonSkippingGroups)
 	metricsDestination = layout.buildDirectory.dir("compose_compiler")
 	reportsDestination = layout.buildDirectory.dir("compose_compiler")
-	stabilityConfigurationFile = rootProject.layout.projectDirectory.file("stability_config.conf")
+	stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("stability_config.conf"))
 }
 
 dependencies {
