@@ -65,8 +65,18 @@ if [ "$PERM_COUNT" -ne 1 ]; then
   exit 1
 fi
 
+TEXT_FILES="
+$PROP_FILE
+$MODULE_DIR/post-fs-data.sh
+$MODULE_DIR/service.sh
+$MODULE_DIR/customize.sh
+$ALLOWLIST
+$MODULE_DIR/META-INF/com/google/android/update-binary
+$MODULE_DIR/META-INF/com/google/android/updater-script
+"
+
 for f in $TEXT_FILES; do
-  if grep -q 'BLUETOOTH_STACK\|android.uid.system\|sharedUserId\|setenforce\|mount -o rw\|pm clear com.android.bluetooth' "$f"; then
+  if [ -f "$f" ] && grep -Eq 'android\.permission\.BLUETOOTH_STACK|android\.uid\.system|sharedUserId|(^|[[:space:]])setenforce([[:space:]]|$)|mount[[:space:]].*-o[[:space:]]*rw|pm[[:space:]]+clear[[:space:]]+com\.android\.bluetooth' "$f"; then
     echo "::error::Unsafe privileged-module directive found in $f" >&2
     exit 1
   fi
