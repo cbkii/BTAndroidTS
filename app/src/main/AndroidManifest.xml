@@ -52,6 +52,11 @@
     android:name="android.hardware.sensor.light"
     android:required="false" />
 
+  <!--
+    Required for TS18 Android 10/API 29 diagnostics export to direct USB paths such as
+    /storage/usbdiskN when the system DocumentsUI picker is absent. This opt-out only
+    affects Android 10/API 29 and is ignored by Android 11+ scoped storage.
+  -->
   <application
     android:name=".BluetoothTerminalApp"
     android:allowBackup="true"
