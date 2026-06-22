@@ -39,9 +39,9 @@ jobs:
     env:
       JAVA_VERSION: '21'
       JAVA_DISTRIBUTION: temurin
-      ANDROID_COMPILE_SDK: '35'
+      ANDROID_COMPILE_SDK: '36'
       ANDROID_MIN_SDK: '29'
-      ANDROID_BUILD_TOOLS: '35.0.0'
+      ANDROID_BUILD_TOOLS: '36.0.0'
       REQUIRES_NINJA: 'true'
 
     steps:
@@ -73,12 +73,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
         with:
-          # setup-android handles commandline-tools bootstrap and license acceptance.
-          # Install explicit platform/build-tool packages in the next shell step so each
-          # sdkmanager package is passed as its own argument, not as one newline-joined input.
-          packages: ''
+          packages: "platform-tools build-tools;${{ env.ANDROID_BUILD_TOOLS }} platforms;android-${{ env.ANDROID_COMPILE_SDK }}"
 
-      - name: Install required Android SDK components
+      - name: Configure local.properties
         shell: bash
         run: |
           set -euo pipefail
@@ -87,10 +84,6 @@ jobs:
             echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
             exit 1
           fi
-          sdkmanager --install \
-            'platform-tools' \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "platforms;android-${ANDROID_COMPILE_SDK}"
           printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
           echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
 
