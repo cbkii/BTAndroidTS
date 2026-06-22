@@ -8,24 +8,24 @@ ALLOWLIST="$MODULE_DIR/system/etc/permissions/privapp-permissions-com.cbkii.btan
 APK="$MODULE_DIR/system/priv-app/BTAndroidTS/BTAndroidTS.apk"
 PROP_FILE="$MODULE_DIR/module.prop"
 
+SCRIPT_FILES="$MODULE_DIR/post-fs-data.sh $MODULE_DIR/service.sh $MODULE_DIR/customize.sh"
+TEXT_FILES="$PROP_FILE $ALLOWLIST $SCRIPT_FILES"
+
 echo "Validating Magisk module at $MODULE_DIR"
 
-# 1. Essential files
-for f in "$PROP_FILE" "$MODULE_DIR/post-fs-data.sh" "$MODULE_DIR/service.sh" "$MODULE_DIR/customize.sh" "$ALLOWLIST" "$APK"; do
+for f in $TEXT_FILES "$APK"; do
   if [ ! -f "$f" ]; then
     echo "::error::Missing file: $f" >&2
     exit 1
   fi
 done
 
-# 2. Line endings (must be LF)
 CR="$(printf '\r')"
-if grep -Iq "$CR" "$PROP_FILE" "$MODULE_DIR/post-fs-data.sh" "$MODULE_DIR/service.sh" "$MODULE_DIR/customize.sh" "$ALLOWLIST"; then
+if grep -Iq "$CR" $TEXT_FILES; then
   echo "::error::CRLF line endings detected in module files. Only LF is allowed." >&2
   exit 1
 fi
 
-# 3. module.prop validation
 if ! grep -q "^id=btandroidts$" "$PROP_FILE"; then
   echo "::error::module.prop: id must be 'btandroidts'" >&2
   exit 1
@@ -43,8 +43,6 @@ if ! grep -q "^versionCode=[0-9]\+$" "$PROP_FILE"; then
   exit 1
 fi
 
-# 4. Privapp allowlist validation
-# It must match the expected package (from aapt or default)
 if ! grep -q "package=\"$EXPECTED_PKG\"" "$ALLOWLIST"; then
   echo "::error::Allowlist package mismatch. Expected: $EXPECTED_PKG" >&2
   grep "package=" "$ALLOWLIST" || true
@@ -56,24 +54,32 @@ if ! grep -q 'android.permission.BLUETOOTH_PRIVILEGED' "$ALLOWLIST"; then
   exit 1
 fi
 
-# 5. Safety checks (block dangerous permissions/directives)
-if grep -q 'android.permission.BLUETOOTH_STACK\|android.uid.system\|sharedUserId' "$ALLOWLIST"; then
+if grep -Eq 'android.permission.BLUETOOTH_STACK|android.uid.system|sharedUserId' "$ALLOWLIST"; then
   echo "::error::Unsafe privilege found in privapp allowlist" >&2
   exit 1
 fi
 
-# Limit to only intended permissions
 PERM_COUNT=$(grep -c '<permission ' "$ALLOWLIST")
 if [ "$PERM_COUNT" -ne 1 ]; then
-  # For now, we only expect BLUETOOTH_PRIVILEGED
   echo "::error::Privapp allowlist grants an unexpected number of permissions ($PERM_COUNT). Expected: 1" >&2
   exit 1
 fi
 
-# Scan all scripts for dangerous commands
-if grep -R -q 'BLUETOOTH_STACK\|android.uid.system\|sharedUserId\|setenforce\|mount -o rw\|pm clear com.android.bluetooth' "$MODULE_DIR"; then
-  echo "::error::Unsafe privileged-module directive found in scripts" >&2
-  exit 1
-fi
+TEXT_FILES="
+$PROP_FILE
+$MODULE_DIR/post-fs-data.sh
+$MODULE_DIR/service.sh
+$MODULE_DIR/customize.sh
+$ALLOWLIST
+$MODULE_DIR/META-INF/com/google/android/update-binary
+$MODULE_DIR/META-INF/com/google/android/updater-script
+"
+
+for f in $TEXT_FILES; do
+  if [ -f "$f" ] && grep -Eq 'android\.permission\.BLUETOOTH_STACK|android\.uid\.system|sharedUserId|(^|[[:space:]])setenforce([[:space:]]|$)|mount[[:space:]].*-o[[:space:]]*rw|pm[[:space:]]+clear[[:space:]]+com\.android\.bluetooth' "$f"; then
+    echo "::error::Unsafe privileged-module directive found in $f" >&2
+    exit 1
+  fi
+done
 
 echo "BTAndroidTS Magisk module validation passed for package: $EXPECTED_PKG"
