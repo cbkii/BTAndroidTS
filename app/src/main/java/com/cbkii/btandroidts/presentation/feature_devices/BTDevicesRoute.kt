@@ -105,7 +105,10 @@ fun BTDevicesRoute(
 			)
 		},
 		snackbarHost = { SnackbarHost(hostState = snackBarHostState) },
-		modifier = modifier.nestedScroll(scrollBehaviour.nestedScrollConnection),
+		modifier = modifier
+			.nestedScroll(scrollBehaviour.nestedScrollConnection)
+			.padding(top = dimensionResource(R.dimen.ts18_status_bar_height))
+			.padding(end = dimensionResource(R.dimen.ts18_nav_bar_width)),
 	) { scPadding ->
 		Column(
 			verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.sc_padding)),
@@ -142,6 +145,7 @@ fun BTDevicesRoute(
 					modifier = Modifier.fillMaxSize(),
 					classicTabContent = {
 						BluetoothDevicesList(
+							isScanning = isScanning,
 							pairedDevices = state.pairedDevices,
 							availableDevices = state.availableDevices,
 							isPairedDevicesReady = state.isPairedDevicesLoaded,
@@ -157,6 +161,7 @@ fun BTDevicesRoute(
 					},
 					leTabContent = {
 						BluetoothLeDeviceList(
+							isScanning = isScanning,
 							hasLocationPermission = hasLocationPermission,
 							leDevices = state.leDevices,
 							onDeviceSelect = onSelectLeDevice,
@@ -219,18 +224,17 @@ private fun Ts18DashboardHeader(
 					onClick = { onAction(Ts18DashboardAction.FILE_SHARING) },
 					modifier = Modifier.weight(1f)
 				)
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_supervision),
-					detail = if (isScanning) stringResource(R.string.ts18_dashboard_scanning)
-					else hidStatus.toDashboardText(),
-					onClick = { onAction(Ts18DashboardAction.SUPERVISION) },
-					modifier = Modifier.weight(1f)
-				)
 			}
 			Row(
 				horizontalArrangement = Arrangement.spacedBy(8.dp),
 				modifier = Modifier.fillMaxWidth()
 			) {
+				DashboardButton(
+					label = stringResource(R.string.keyboard_test_title),
+					detail = stringResource(R.string.keyboard_test_desc),
+					onClick = { onAction(Ts18DashboardAction.KEYBOARD_TEST) },
+					modifier = Modifier.weight(1f)
+				)
 				DashboardButton(
 					label = stringResource(R.string.ts18_dashboard_diagnostics),
 					detail = stringResource(R.string.ts18_dashboard_local_export),
@@ -257,13 +261,25 @@ private fun DashboardButton(
 ) {
 	FilledTonalButton(
 		onClick = onClick,
-		modifier = modifier,
+		modifier = modifier.heightIn(min = dimensionResource(R.dimen.dashboard_card_min_height)),
+		shape = androidx.compose.material3.MaterialTheme.shapes.medium,
+		contentPadding = PaddingValues(16.dp)
 	) {
-		Column {
-			Text(text = label)
+		Column(
+			modifier = Modifier.fillMaxWidth(),
+			verticalArrangement = Arrangement.Center
+		) {
+			Text(
+				text = label,
+				style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+				maxLines = 1,
+				overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+			)
 			Text(
 				text = detail,
-				style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+				style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+				maxLines = 2,
+				overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
 			)
 		}
 	}
@@ -276,6 +292,7 @@ enum class Ts18DashboardAction {
 	SUPERVISION,
 	DIAGNOSTICS,
 	ADVANCED_TOOLS,
+	KEYBOARD_TEST,
 }
 
 @Composable
@@ -298,7 +315,7 @@ private class BTDeviceClassicalScreenStateParams :
 		)
 	)
 
-@PreviewLightDark
+@Preview(showBackground = true, widthDp = 1280, heightDp = 720)
 @Composable
 private fun BTDeviceRouteWithClassicDevicesPreview(
 	@PreviewParameter(BTDeviceClassicalScreenStateParams::class)
@@ -321,7 +338,7 @@ class BTDevicesLEScreenStateParams
 	)
 )
 
-@PreviewLightDark
+@Preview(showBackground = true, widthDp = 1280, heightDp = 720)
 @Composable
 private fun BTDeviceRouteWithLEDevicesPreview(
 	@PreviewParameter(BTDevicesLEScreenStateParams::class)

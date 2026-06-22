@@ -24,4 +24,7 @@ object Routes {
 
 	//info route
 	const val INFORMATION_ROUTE = "info"
+
+	// keyboard test route
+	const val KEYBOARD_TEST_ROUTE = "keyboard_test"
 }

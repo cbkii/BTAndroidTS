@@ -143,6 +143,15 @@ Developer, reviewer, and AI-agent guidance lives outside this end-user README:
 - [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md)
 - [docs/INSTALLATION_OPERATION_ROLLBACK.md](docs/INSTALLATION_OPERATION_ROLLBACK.md)
 
+## TS18 Dashboard Layout
+
+The main screen is optimized for a 1280x720 landscape display:
+- **Large Controls:** Dashboard actions are presented as large cards for easy touch access.
+- **TS18 Safe Zones:** Content is padded to avoid the approximate 55px top status bar and right navigation bar.
+- **Glanceable States:** Connection states are explicitly labeled (e.g., "Pair", "Bonded", "HID active").
+- **Keyboard Test:** A dedicated tool to verify Bluetooth keyboard input is available from the dashboard.
+- **Advanced Tools:** Low-level tools like RFCOMM terminal and BLE GATT are moved under the "Advanced Tools" section.
+
 ### :revolving_hearts: Special Thanks
 
 Special thanks to [upstream/original Author](https://github.com/tuuhin/BTAndroidApp/issues/new)    ヾ(＠⌒ー⌒＠)ノ

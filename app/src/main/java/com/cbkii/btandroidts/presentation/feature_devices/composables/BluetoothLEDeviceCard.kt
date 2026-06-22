@@ -115,25 +115,24 @@ fun BluetoothLEDeviceCard(
 				)
 				Text(
 					text = buildAnnotatedString {
-						append(stringResource(id = R.string.bluetooth_device_mac_address_title))
-						append(" ")
-						withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) {
-							append(leDeviceModel.deviceModel.address)
-						}
+						append(leDeviceModel.deviceModel.address)
+						append(" | ")
+						append(leDeviceModel.deviceModel.mode.name)
 					},
-					style = MaterialTheme.typography.bodyMedium,
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant
 				)
 				Row(
-					verticalAlignment = Alignment.Bottom,
-					horizontalArrangement = Arrangement.spacedBy(2.dp),
+					verticalAlignment = Alignment.CenterVertically,
+					horizontalArrangement = Arrangement.spacedBy(4.dp),
 					modifier = Modifier
 						.wrapContentSize()
-						.padding(top = 4.dp)
+						.padding(top = 2.dp)
 				) {
 					SignalsBars(
 						rssi = { localRssi },
 						color = MaterialTheme.colorScheme.onPrimaryContainer,
-						modifier = Modifier.size(width = 20.dp, height = 20.dp)
+						modifier = Modifier.size(width = 16.dp, height = 16.dp)
 					)
 					Text(
 						text = buildString {
@@ -141,7 +140,8 @@ fun BluetoothLEDeviceCard(
 							append(" ")
 							append(BluetoothDeviceModel.RSSI_UNIT)
 						},
-						style = MaterialTheme.typography.labelLarge
+						style = MaterialTheme.typography.labelSmall,
+						color = MaterialTheme.colorScheme.onSurfaceVariant
 					)
 				}
 			}
