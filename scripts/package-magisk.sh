@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # package-magisk.sh <apk_path> [zip_suffix]
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
 set -euo pipefail
 
 APK_PATH="${1:-app/build/outputs/apk/ts18Privileged/release/app-ts18Privileged-release.apk}"
