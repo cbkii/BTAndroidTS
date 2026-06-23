@@ -1,9 +1,37 @@
 #!/usr/bin/env bash
 # validate-magisk-package.sh [expected_package_name] [module_dir]
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
 set -euo pipefail
 
 EXPECTED_PKG="${1:-com.cbkii.btandroidts}"
 MODULE_DIR="${2:-magisk/BTAndroidTS}"
+TEMP_ROOT=""
+
+cleanup() {
+  if [[ -n "${TEMP_ROOT}" ]]; then
+    rm -rf "${TEMP_ROOT}"
+  fi
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+if [[ $# -lt 2 && ! -f "${MODULE_DIR}/system/priv-app/BTAndroidTS/BTAndroidTS.apk" ]]; then
+  ZIP_CANDIDATE="$(find build -maxdepth 1 -type f -name 'BTAndroidTS-*-magisk.zip' -print 2>/dev/null | sort | tail -n 1 || true)"
+  if [[ -n "${ZIP_CANDIDATE}" ]]; then
+    if ! command -v unzip >/dev/null 2>&1; then
+      printf '::error::unzip is required to validate packaged Magisk zip: %s\n' "${ZIP_CANDIDATE}" >&2
+      exit 1
+    fi
+    TEMP_ROOT="$(mktemp -d)"
+    MODULE_DIR="${TEMP_ROOT}/BTAndroidTS"
+    mkdir -p "${MODULE_DIR}"
+    unzip -q "${ZIP_CANDIDATE}" -d "${MODULE_DIR}"
+    printf 'Validating packaged Magisk zip: %s\n' "${ZIP_CANDIDATE}"
+  fi
+fi
+
 ALLOWLIST="${MODULE_DIR}/system/etc/permissions/privapp-permissions-com.cbkii.btandroidts.xml"
 APK="${MODULE_DIR}/system/priv-app/BTAndroidTS/BTAndroidTS.apk"
 PROP_FILE="${MODULE_DIR}/module.prop"
