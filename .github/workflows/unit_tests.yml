@@ -80,3 +80,15 @@ jobs:
 
       - name: Unit tests
         run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:testStandardDebugUnitTest
+
+      - name: Upload unit test reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: btandroidts-unit-test-reports
+          path: |
+            app/build/reports/tests/**
+            app/build/test-results/**
+            build/reports/problems/**
+          if-no-files-found: ignore
+          retention-days: 7

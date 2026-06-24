@@ -76,12 +76,12 @@ fun OppHistoryScreen(
 
 
 @StringRes
-private fun oppTransferStateLabelRes(state: OppTransferState): Int = when (state.name) {
-    "QUEUED" -> R.string.opp_history_state_queued
-    "RUNNING" -> R.string.opp_history_state_running
-    "DELEGATED_TO_STOCK_OPP" -> R.string.opp_history_state_delegated_to_stock_opp
-    "COMPLETED" -> R.string.opp_history_state_completed
-    "FAILED" -> R.string.opp_history_state_failed
-    "CANCELLED", "CANCELED" -> R.string.opp_history_state_cancelled
-    else -> R.string.opp_history_state_unknown
+private fun oppTransferStateLabelRes(state: OppTransferState): Int = when (state) {
+    OppTransferState.QUEUED -> R.string.opp_history_state_queued
+    OppTransferState.RUNNING -> R.string.opp_history_state_running
+    OppTransferState.DELEGATED_TO_STOCK_OPP -> R.string.opp_history_state_delegated_to_stock_opp
+    OppTransferState.COMPLETED -> R.string.opp_history_state_completed
+    OppTransferState.FAILED -> R.string.opp_history_state_failed
+    OppTransferState.CANCELLED -> R.string.opp_history_state_cancelled
+    OppTransferState.REQUIRES_DEVICE_VALIDATION -> R.string.opp_history_state_requires_device_validation
 }

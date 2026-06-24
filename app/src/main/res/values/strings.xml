@@ -67,6 +67,7 @@
   <string name="opp_history_transfer_title">Transfer %1$s</string>
   <string name="opp_history_status">Status: %1$s</string>
   <string name="opp_history_state_unknown">Unknown</string>
+  <string name="opp_history_state_requires_device_validation">Requires device validation</string>
   <string name="opp_history_state_cancelled">Cancelled</string>
   <string name="opp_history_state_failed">Failed</string>
   <string name="opp_history_state_completed">Completed</string>

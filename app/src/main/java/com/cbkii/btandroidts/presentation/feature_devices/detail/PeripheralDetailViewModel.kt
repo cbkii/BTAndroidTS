@@ -24,11 +24,14 @@ data class PeripheralDetailRequest(
     val fallbackName: String?,
 ) {
     companion object {
-        fun fromArgs(args: PeripheralDetailArgs): PeripheralDetailRequest =
+        fun fromRaw(address: String, name: String): PeripheralDetailRequest =
             PeripheralDetailRequest(
-                address = BluetoothAddress.parse(args.address),
-                fallbackName = args.name.takeIf { it.isNotBlank() },
+                address = BluetoothAddress.parse(address),
+                fallbackName = name.takeIf { it.isNotBlank() },
             )
+
+        fun fromArgs(args: PeripheralDetailArgs): PeripheralDetailRequest =
+            fromRaw(args.address, args.name)
     }
 }
 
