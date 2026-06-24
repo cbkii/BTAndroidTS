@@ -54,6 +54,27 @@
   <string name="keyboard_test_placeholder">Focus here and start typing…</string>
   <string name="keyboard_test_last_char">Last character: %s</string>
 
+  <string name="keyboard_test_detected_input_devices">Detected Input Devices</string>
+  <string name="keyboard_test_device_type">Type: %1$s</string>
+  <string name="keyboard_test_device_type_keyboard">Keyboard</string>
+  <string name="keyboard_test_device_type_other">Other</string>
+  <string name="action_save">Save</string>
+  <string name="action_forget">Forget</string>
+  <string name="action_protect">Protect</string>
+  <string name="action_unprotect">Unprotect</string>
+  <string name="opp_history_title">Transfer History</string>
+  <string name="opp_history_stock_bluetooth_note">Outbound transfers delegated to stock Android Bluetooth.</string>
+  <string name="opp_history_transfer_title">Transfer %1$s</string>
+  <string name="opp_history_status">Status: %1$s</string>
+  <string name="opp_history_state_unknown">Unknown</string>
+  <string name="opp_history_state_cancelled">Cancelled</string>
+  <string name="opp_history_state_failed">Failed</string>
+  <string name="opp_history_state_completed">Completed</string>
+  <string name="opp_history_state_delegated_to_stock_opp">Delegated to stock Bluetooth</string>
+  <string name="opp_history_state_running">Running</string>
+  <string name="opp_history_state_queued">Queued</string>
+  <string name="peripheral_detail_invalid_address">Invalid Bluetooth address. Return to the device list and open this device again.</string>
+
   <string name="state_no_devices">No devices found</string>
   <string name="state_scanning">Scanning for devices…</string>
   <string name="state_pairing_failed">Pairing failed</string>

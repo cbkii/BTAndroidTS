@@ -21,7 +21,6 @@ class OppHistoryViewModel(
         .map { OppHistoryState(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OppHistoryState())
 
-    fun retry(id: String) { }
 
     fun cancel(id: String) {
         transferController.cancel(id)

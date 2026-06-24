@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+package btandroidts;
+
 option java_package = "com.cbkii.btandroidts.data.datastore";
 option java_multiple_files = true;
 
