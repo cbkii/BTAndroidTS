@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import com.cbkii.btandroidts.R
-import com.cbkii.btandroidts.presentation.composables.BTAppNavigationDrawer
 import com.cbkii.btandroidts.presentation.feature_devices.BTDeviceViewmodel
 import com.cbkii.btandroidts.presentation.feature_devices.BTDevicesRoute
 import com.cbkii.btandroidts.presentation.feature_devices.Ts18DashboardAction

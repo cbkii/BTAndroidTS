@@ -70,13 +70,13 @@ find_aapt() {
 
 extract_package_name() {
   local apk="$1"
-  "${AAPT_BIN}" dump badging "${apk}" | awk -F"'" '/^package: name=/{print $2; exit}'
+  "${AAPT_BIN}" dump badging "${apk}" | grep "package: name=" | cut -d"'" -f2
 }
 
 cleanup() {
   rm -rf "${STAGE_ROOT}"
 }
-trap cleanup EXIT
+# trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 
 printf '%s\n' '--- BTAndroidTS Magisk Packaging ---'
@@ -127,7 +127,7 @@ if [[ "${PKG_NAME}" == *.debug ]]; then
   IS_DEBUG=true
 fi
 
-ORIG_ALLOWLIST_PKG="$(awk -F'"' '/<privapp-permissions package=/{print $2; exit}' "${ALLOWLIST}")"
+ORIG_ALLOWLIST_PKG="$(grep "privapp-permissions package=" "${ALLOWLIST}" | sed -e 's/.*package="//' -e 's/".*//' | head -1)"
 if [[ -z "${ORIG_ALLOWLIST_PKG}" ]]; then
   printf '::error::Failed to read package name from staged allowlist: %s\n' "${ALLOWLIST}" >&2
   exit 1
@@ -135,19 +135,7 @@ fi
 
 if [[ "${PKG_NAME}" != "${ORIG_ALLOWLIST_PKG}" ]]; then
   printf 'Patching staged allowlist package from %s to %s\n' "${ORIG_ALLOWLIST_PKG}" "${PKG_NAME}"
-  python3 - "${ALLOWLIST}" "${ORIG_ALLOWLIST_PKG}" "${PKG_NAME}" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-old = sys.argv[2]
-new = sys.argv[3]
-text = path.read_text(encoding='utf-8')
-needle = f'package="{old}"'
-replacement = f'package="{new}"'
-if needle not in text:
-    sys.exit(f'Package marker not found: {needle}')
-path.write_text(text.replace(needle, replacement, 1), encoding='utf-8', newline='\n')
-PY
+  sed -i "s/package=\"${ORIG_ALLOWLIST_PKG}\"/package=\"${PKG_NAME}\"/g" "${ALLOWLIST}"
 fi
 
 bash scripts/validate-magisk-package.sh "${PKG_NAME}" "${STAGE_MODULE_DIR}"
@@ -159,7 +147,7 @@ rm -f "${ZIP_PATH}"
 )
 
 test -f "${ZIP_PATH}"
-trap - EXIT HUP INT TERM
+# trap - EXIT HUP INT TERM
 
 printf 'ZIP Path: %s\n' "${ZIP_PATH}"
 printf 'Staged Module: %s\n' "${STAGE_MODULE_DIR}"
