@@ -18,8 +18,8 @@ android {
 		applicationId = "com.cbkii.btandroidts"
 		minSdk = libs.versions.android.minsdk.get().toInt()
 		targetSdk = libs.versions.android.targetsdk.get().toInt()
-		versionCode = 180001
-		versionName = "18.0.0-alpha01"
+		versionCode = 180002
+		versionName = "18.0.1"
 
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 		vectorDrawables {
