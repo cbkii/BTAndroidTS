@@ -59,13 +59,7 @@ jobs:
             echo "::error::Manual releases must run from a branch."
             exit 1
           fi
-          case "${GITHUB_REF_NAME}" in
-            main|feat/ts18-peripheral-manager) ;;
-            *)
-              echo "::error::Manual BTAndroidTS releases must run from main or feat/ts18-peripheral-manager, not '${GITHUB_REF_NAME}'."
-              exit 1
-              ;;
-          esac
+          echo "Manual release selected branch: ${GITHUB_REF_NAME}"
           git fetch --tags origin "+refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
           local_head="$(git rev-parse HEAD)"
           remote_head="$(git rev-parse "origin/${GITHUB_REF_NAME}")"
@@ -107,6 +101,7 @@ jobs:
           test -d "${sdk_root}/platforms/android-${ANDROID_COMPILE_SDK}"
           test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
           test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
+          test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/zipalign"
           echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
 
       - name: Ensure native build tools are present
@@ -276,19 +271,31 @@ jobs:
       - name: Build signed release APKs
         run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:assembleStandardRelease :app:assembleTs18PrivilegedRelease
 
+      - name: Validate signed release APKs
+        id: validate_apks
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/validate-release-apks.sh
+          standard_apk="$(find app/build/outputs/apk/standard/release -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | sort | tail -n 1)"
+          ts18_apk="$(find app/build/outputs/apk/ts18Privileged/release -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | sort | tail -n 1)"
+          test -n "${standard_apk}"
+          test -n "${ts18_apk}"
+          echo "standard_apk=${standard_apk}" >> "$GITHUB_OUTPUT"
+          echo "ts18_apk=${ts18_apk}" >> "$GITHUB_OUTPUT"
+
       - name: Package and validate Magisk module
         id: package_magisk
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t apk_candidates < <(find app/build/outputs/apk/ts18Privileged/release -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | sort)
-          if (( ${#apk_candidates[@]} != 1 )); then
-            echo "::error::Expected exactly one signed TS18 privileged release APK; found ${#apk_candidates[@]}."
-            printf 'Candidate: %s\n' "${apk_candidates[@]}"
+          ts18_apk="${{ steps.validate_apks.outputs.ts18_apk }}"
+          if [[ -z "${ts18_apk}" || ! -f "${ts18_apk}" ]]; then
+            echo "::error::Validated TS18 privileged release APK not found: ${ts18_apk}"
             exit 1
           fi
-          # scripts/package-magisk.sh now calls validation internally
-          bash scripts/package-magisk.sh "${apk_candidates[0]}" "release"
+          # scripts/package-magisk.sh calls validation internally.
+          bash scripts/package-magisk.sh "${ts18_apk}" "release"
           unzip -t build/BTAndroidTS-release-magisk.zip >/dev/null
           echo "magisk_zip=build/BTAndroidTS-release-magisk.zip" >> "$GITHUB_OUTPUT"
 
@@ -299,12 +306,9 @@ jobs:
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
           set -euo pipefail
-          build_tools_dir="$(find "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
-          apksigner="${build_tools_dir}/apksigner"
-          test -x "${apksigner}"
-          declare -A variant_dirs=(
-            [standard]="app/build/outputs/apk/standard/release"
-            [ts18_privileged]="app/build/outputs/apk/ts18Privileged/release"
+          declare -A source_apks=(
+            [standard]="${{ steps.validate_apks.outputs.standard_apk }}"
+            [ts18_privileged]="${{ steps.validate_apks.outputs.ts18_apk }}"
           )
           declare -A asset_names=(
             [standard]="BTAndroidTS-${RELEASE_TAG}-standard-release.apk"
@@ -313,17 +317,11 @@ jobs:
           asset_paths=()
           asset_names_out=()
           for variant in standard ts18_privileged; do
-            # Use correct flavor paths
-            # standard: app/build/outputs/apk/standard/release/app-standard-release.apk
-            # ts18Privileged: app/build/outputs/apk/ts18Privileged/release/app-ts18Privileged-release.apk
-            mapfile -t apks < <(find "${variant_dirs[$variant]}" -maxdepth 1 -type f -name '*.apk' ! -name '*unsigned*' | sort)
-            if (( ${#apks[@]} == 0 )); then
-              echo "::error::No ${variant} release APK found."
+            target_apk="${source_apks[$variant]}"
+            if [[ -z "${target_apk}" || ! -f "${target_apk}" ]]; then
+              echo "::error::Validated ${variant} release APK not found: ${target_apk}"
               exit 1
             fi
-            # Use the latest built APK
-            target_apk="${apks[-1]}"
-            "${apksigner}" verify --verbose "${target_apk}"
             asset_path="${RUNNER_TEMP}/${asset_names[$variant]}"
             cp "${target_apk}" "${asset_path}"
             asset_paths+=("${asset_path}")
