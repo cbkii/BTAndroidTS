@@ -15,7 +15,8 @@ data class PeripheralDetailState(
     val savedRecord: SavedPeripheralRecord? = null,
     val protectedRecord: ProtectedPeripheralRecord? = null,
     val retryState: PeripheralRetryState? = null,
-    val isBusy: Boolean = false
+    val isBusy: Boolean = false,
+    val isAddressValid: Boolean = true
 )
 
 data class PeripheralDetailRequest(
@@ -54,7 +55,10 @@ class PeripheralDetailViewModel(
     override val uiEvents: SharedFlow<UiEvents> = _uiEvents.asSharedFlow()
 
     private val _isBusy = MutableStateFlow(false)
-    private val eventMutex = Mutex()
+    private val policyMutex = Mutex()
+    private val busyMutex = Mutex()
+    private var busyOperations = 0
+    private var activeHidJob: kotlinx.coroutines.Job? = null
 
     val state: StateFlow<PeripheralDetailState> = combine(
         inventoryRepository.devices,
@@ -62,7 +66,7 @@ class PeripheralDetailViewModel(
         hidHostController.profileStates,
         _isBusy
     ) { devices, policy, hidStates, busy ->
-        val addr = address ?: return@combine PeripheralDetailState(isBusy = busy)
+        val addr = address ?: return@combine PeripheralDetailState(isBusy = busy, isAddressValid = false)
         val device = devices.find { it.address == addr }
         val hidState = hidStates[addr] ?: ProfileConnectionState.DISCONNECTED
 
@@ -80,10 +84,29 @@ class PeripheralDetailViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PeripheralDetailState())
 
     fun onEvent(event: PeripheralDetailEvent) {
-        val addr = address ?: return
+        val addr = address
+        if (addr == null) {
+            viewModelScope.launch { _uiEvents.emit(UiEvents.ShowSnackBar("Invalid Bluetooth address")) }
+            return
+        }
+
+        when (event) {
+            PeripheralDetailEvent.Save,
+            PeripheralDetailEvent.Forget,
+            PeripheralDetailEvent.Protect,
+            PeripheralDetailEvent.Unprotect -> runPolicyEvent(addr, event)
+            PeripheralDetailEvent.RetryManual -> viewModelScope.launch {
+                _uiEvents.emit(UiEvents.ShowToast("Manual retry requested"))
+            }
+            PeripheralDetailEvent.ConnectHid -> runHidEvent { hidHostController.connect(addr) }
+            PeripheralDetailEvent.DisconnectHid -> runHidEvent { hidHostController.disconnect(addr) }
+        }
+    }
+
+    private fun runPolicyEvent(addr: BluetoothAddress, event: PeripheralDetailEvent) {
         viewModelScope.launch {
-            eventMutex.withLock {
-                _isBusy.value = true
+            policyMutex.withLock {
+                beginBusy()
                 try {
                     when (event) {
                         PeripheralDetailEvent.Save -> {
@@ -113,14 +136,42 @@ class PeripheralDetailViewModel(
                             )
                         }
                         PeripheralDetailEvent.Unprotect -> policyStore.removeProtectedDevice(addr)
-                        PeripheralDetailEvent.RetryManual -> _uiEvents.emit(UiEvents.ShowToast("Manual retry requested"))
-                        PeripheralDetailEvent.ConnectHid -> handleHidResult(hidHostController.connect(addr))
-                        PeripheralDetailEvent.DisconnectHid -> handleHidResult(hidHostController.disconnect(addr))
+                        else -> Unit
                     }
                 } finally {
-                    _isBusy.value = false
+                    endBusy()
                 }
             }
+        }
+    }
+
+    private fun runHidEvent(operation: suspend () -> HidOperationResult) {
+        if (activeHidJob?.isActive == true) {
+            viewModelScope.launch { _uiEvents.emit(UiEvents.ShowToast("HID operation already running")) }
+            return
+        }
+        activeHidJob = viewModelScope.launch {
+            beginBusy()
+            try {
+                handleHidResult(operation())
+            } finally {
+                activeHidJob = null
+                endBusy()
+            }
+        }
+    }
+
+    private suspend fun beginBusy() {
+        busyMutex.withLock {
+            busyOperations += 1
+            _isBusy.value = true
+        }
+    }
+
+    private suspend fun endBusy() {
+        busyMutex.withLock {
+            busyOperations = (busyOperations - 1).coerceAtLeast(0)
+            _isBusy.value = busyOperations > 0
         }
     }
 

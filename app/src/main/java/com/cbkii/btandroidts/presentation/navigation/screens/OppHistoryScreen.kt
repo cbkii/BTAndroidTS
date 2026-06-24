@@ -1,5 +1,6 @@
 package com.cbkii.btandroidts.presentation.navigation.screens
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -60,7 +61,7 @@ fun OppHistoryScreen(
                             Text(DateFormat.getDateTimeInstance().format(Date(item.createdAtMillis)), style = MaterialTheme.typography.labelSmall)
                         }
                         Text(item.summary, style = MaterialTheme.typography.bodyMedium)
-                        Text(stringResource(R.string.opp_history_status, item.state), style = MaterialTheme.typography.bodySmall, color = if (item.state == OppTransferState.COMPLETED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        Text(stringResource(R.string.opp_history_status, stringResource(oppTransferStateLabelRes(item.state))), style = MaterialTheme.typography.bodySmall, color = if (item.state == OppTransferState.COMPLETED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
                         if (item.state == OppTransferState.QUEUED || item.state == OppTransferState.DELEGATED_TO_STOCK_OPP || item.state == OppTransferState.RUNNING) {
                             TextButton(onClick = { viewModel.cancel(item.id) }) {
                                 Text(stringResource(R.string.dialog_action_cancel))
@@ -71,4 +72,16 @@ fun OppHistoryScreen(
             }
         }
     }
+}
+
+
+@StringRes
+private fun oppTransferStateLabelRes(state: OppTransferState): Int = when (state.name) {
+    "QUEUED" -> R.string.opp_history_state_queued
+    "RUNNING" -> R.string.opp_history_state_running
+    "DELEGATED_TO_STOCK_OPP" -> R.string.opp_history_state_delegated_to_stock_opp
+    "COMPLETED" -> R.string.opp_history_state_completed
+    "FAILED" -> R.string.opp_history_state_failed
+    "CANCELLED", "CANCELED" -> R.string.opp_history_state_cancelled
+    else -> R.string.opp_history_state_unknown
 }

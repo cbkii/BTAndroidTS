@@ -77,7 +77,7 @@ cleanup() {
   rm -rf "${STAGE_ROOT}"
 }
 trap cleanup EXIT
-trap 'cleanup; exit 1' HUP INT TERM
+trap 'exit 1' HUP INT TERM
 
 printf '%s\n' '--- BTAndroidTS Magisk Packaging ---'
 printf 'Source APK: %s\n' "${APK_PATH}"
@@ -147,7 +147,8 @@ needle = f'package="{old}"'
 replacement = f'package="{new}"'
 if needle not in text:
     raise SystemExit(f'Package marker not found in staged allowlist: {needle}')
-path.write_text(text.replace(needle, replacement, 1), encoding="utf-8", newline="\n")
+with open(path, "w", encoding="utf-8", newline="\n") as f:
+    f.write(text.replace(needle, replacement, 1))
 PY_ALLOWLIST
 fi
 

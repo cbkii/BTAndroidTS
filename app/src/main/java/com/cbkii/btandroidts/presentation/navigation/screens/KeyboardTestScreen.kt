@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -55,7 +56,7 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
                     placeholder = { Text(stringResource(R.string.keyboard_test_placeholder)) }
                 )
                 state.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                Button(onClick = { openKeyboardSettings(context) }) { Text(stringResource(R.string.settings_tooltip_text)) }
+                Button(onClick = { openKeyboardSettings(context); viewModel.refreshInputDevices() }) { Text(stringResource(R.string.settings_tooltip_text)) }
             }
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.keyboard_test_detected_input_devices), style = MaterialTheme.typography.titleMedium)
@@ -94,40 +95,58 @@ class KeyboardTestViewModel(
     val state: StateFlow<KeyboardTestState> = _state.asStateFlow()
 
     private var verificationAttempted = false
+    private var verificationInProgress = false
     private var verifiedAddress: BluetoothAddress? = null
     private var cachedInputDevices: List<AndroidInputDeviceInfo>? = null
 
     init {
         refreshInputDevices()
-    }
-
-    fun recordSuccessOnce() {
-        if (verificationAttempted || verifiedAddress != null) return
-        verificationAttempted = true
         viewModelScope.launch {
-            val inputDevices = cachedInputDevices ?: withContext(Dispatchers.Default) { inputDeviceRepository.listInputDevices() }
-                .also { cachedInputDevices = it }
-            val candidates = withContext(Dispatchers.Default) {
-                KeyboardInputVerifier.matchingBondedDevices(inventoryRepository.devices.value, inputDevices)
-            }
-            when (candidates.size) {
-                1 -> {
-                    val candidate = candidates.single()
-                    val address = candidate.address
-                    val existingVerification = inputDeviceRepository.getVerificationResult(address).first()
-                    verifiedAddress = address
-                    if (existingVerification?.success != true) {
-                        inputDeviceRepository.recordVerification(address, true)
-                    }
-                    _state.update { it.copy(message = "Input verified for ${candidate.displayName}") }
-                }
-                0 -> _state.update { it.copy(message = "No matching bonded input device found; verification not recorded.") }
-                else -> _state.update { it.copy(message = "Multiple matching input devices found; choose one device before recording verification.") }
+            inventoryRepository.devices.collect {
+                refreshInputDevices()
             }
         }
     }
 
-    private fun refreshInputDevices() {
+    fun recordSuccessOnce() {
+        if (verificationInProgress || verificationAttempted || verifiedAddress != null) return
+        verificationInProgress = true
+        viewModelScope.launch {
+            try {
+                val inputDevices = withContext(Dispatchers.Default) { inputDeviceRepository.listInputDevices() }
+                cachedInputDevices = inputDevices
+                _state.update { it.copy(inputDevices = inputDevices) }
+                val candidates = withContext(Dispatchers.Default) {
+                    KeyboardInputVerifier.matchingBondedDevices(inventoryRepository.devices.value, inputDevices)
+                }
+                when (candidates.size) {
+                    1 -> {
+                        val candidate = candidates.single()
+                        val address = candidate.address
+                        val existingVerification = inputDeviceRepository.getVerificationResult(address).first()
+                        if (existingVerification?.success != true) {
+                            inputDeviceRepository.recordVerification(address, true)
+                        }
+                        verifiedAddress = address
+                        verificationAttempted = true
+                        _state.update { it.copy(message = "Input verified for ${candidate.displayName}") }
+                    }
+                    0 -> {
+                        verificationAttempted = false
+                        _state.update { it.copy(message = "No matching bonded keyboard input device found; verification not recorded.") }
+                    }
+                    else -> {
+                        verificationAttempted = false
+                        _state.update { it.copy(message = "Multiple matching keyboard input devices found; choose one device before recording verification.") }
+                    }
+                }
+            } finally {
+                verificationInProgress = false
+            }
+        }
+    }
+
+    fun refreshInputDevices() {
         viewModelScope.launch {
             val inputDevices = withContext(Dispatchers.Default) { inputDeviceRepository.listInputDevices() }
             cachedInputDevices = inputDevices
@@ -145,7 +164,8 @@ internal object KeyboardInputVerifier {
         devices: List<UnifiedBluetoothDevice>,
         inputDevices: List<AndroidInputDeviceInfo>,
     ): List<UnifiedBluetoothDevice> = devices.filter { device ->
-        device.bondState == BondStatus.BONDED && inputDevices.any { it.matches(device.address) }
+        device.bondState == BondStatus.BONDED &&
+            inputDevices.any { inputDevice -> inputDevice.isKeyboard && inputDevice.matches(device.address) }
     }
 
     private fun AndroidInputDeviceInfo.matches(address: BluetoothAddress): Boolean {

@@ -62,25 +62,35 @@ fun AnimatedVisibilityScope.PeripheralDetailScreen(
                 modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(top = 8.dp, end = 55.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                state.device?.let { device ->
+                if (!state.isAddressValid) {
                     Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(device.displayName, style = MaterialTheme.typography.headlineSmall)
-                            Text(device.address.value, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = stringResource(R.string.peripheral_detail_invalid_address),
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else {
+                    state.device?.let { device ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(device.displayName, style = MaterialTheme.typography.headlineSmall)
+                                Text(device.address.value, style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
-                }
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (state.savedRecord == null) {
-                        Button(onClick = { viewModel.onEvent(PeripheralDetailEvent.Save) }) { Text(stringResource(R.string.action_save)) }
-                    } else {
-                        Button(onClick = { viewModel.onEvent(PeripheralDetailEvent.Forget) }) { Text(stringResource(R.string.action_forget)) }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (state.savedRecord == null) {
+                            Button(onClick = { viewModel.onEvent(PeripheralDetailEvent.Save) }) { Text(stringResource(R.string.action_save)) }
+                        } else {
+                            Button(onClick = { viewModel.onEvent(PeripheralDetailEvent.Forget) }) { Text(stringResource(R.string.action_forget)) }
+                        }
+                        Button(onClick = {
+                            if (state.protectedRecord == null) viewModel.onEvent(PeripheralDetailEvent.Protect)
+                            else viewModel.onEvent(PeripheralDetailEvent.Unprotect)
+                        }) { Text(stringResource(if (state.protectedRecord == null) R.string.action_protect else R.string.action_unprotect)) }
                     }
-                    Button(onClick = {
-                        if (state.protectedRecord == null) viewModel.onEvent(PeripheralDetailEvent.Protect)
-                        else viewModel.onEvent(PeripheralDetailEvent.Unprotect)
-                    }) { Text(stringResource(if (state.protectedRecord == null) R.string.action_protect else R.string.action_unprotect)) }
                 }
             }
         }

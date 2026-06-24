@@ -42,6 +42,14 @@ class KeyboardInputVerifierTest {
         assertEquals(emptyList<UnifiedBluetoothDevice>(), KeyboardInputVerifier.matchingBondedDevices(listOf(bonded, unbonded), inputs))
     }
 
+
+    @Test
+    fun matchingIgnoresNonKeyboardInputDevices() {
+        val bonded = device("00:11:22:33:44:55")
+        val inputs = listOf(input("001122334455", isKeyboard = false))
+        assertEquals(emptyList<UnifiedBluetoothDevice>(), KeyboardInputVerifier.matchingBondedDevices(listOf(bonded), inputs))
+    }
+
     private fun device(address: String, bondStatus: BondStatus = BondStatus.BONDED): UnifiedBluetoothDevice =
         UnifiedBluetoothDevice(
             address = BluetoothAddress.requireValid(address),
@@ -60,11 +68,11 @@ class KeyboardInputVerifierTest {
             laneOwner = BluetoothLaneOwner.ANDROID_PERIPHERAL,
         )
 
-    private fun input(name: String): AndroidInputDeviceInfo = AndroidInputDeviceInfo(
+    private fun input(name: String, isKeyboard: Boolean = true): AndroidInputDeviceInfo = AndroidInputDeviceInfo(
         id = 1,
         name = name,
         descriptor = name,
-        isKeyboard = true,
+        isKeyboard = isKeyboard,
         isPointer = false,
         sources = 0,
     )
