@@ -76,8 +76,8 @@ extract_package_name() {
 cleanup() {
   rm -rf "${STAGE_ROOT}"
 }
-# trap cleanup EXIT
-trap 'exit 1' HUP INT TERM
+trap cleanup EXIT
+trap 'cleanup; exit 1' HUP INT TERM
 
 printf '%s\n' '--- BTAndroidTS Magisk Packaging ---'
 printf 'Source APK: %s\n' "${APK_PATH}"
@@ -135,7 +135,20 @@ fi
 
 if [[ "${PKG_NAME}" != "${ORIG_ALLOWLIST_PKG}" ]]; then
   printf 'Patching staged allowlist package from %s to %s\n' "${ORIG_ALLOWLIST_PKG}" "${PKG_NAME}"
-  sed -i "s/package=\"${ORIG_ALLOWLIST_PKG}\"/package=\"${PKG_NAME}\"/g" "${ALLOWLIST}"
+  python3 - "${ALLOWLIST}" "${ORIG_ALLOWLIST_PKG}" "${PKG_NAME}" <<'PY_ALLOWLIST'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+old = sys.argv[2]
+new = sys.argv[3]
+text = path.read_text(encoding="utf-8")
+needle = f'package="{old}"'
+replacement = f'package="{new}"'
+if needle not in text:
+    raise SystemExit(f'Package marker not found in staged allowlist: {needle}')
+path.write_text(text.replace(needle, replacement, 1), encoding="utf-8", newline="\n")
+PY_ALLOWLIST
 fi
 
 bash scripts/validate-magisk-package.sh "${PKG_NAME}" "${STAGE_MODULE_DIR}"
@@ -147,8 +160,6 @@ rm -f "${ZIP_PATH}"
 )
 
 test -f "${ZIP_PATH}"
-# trap - EXIT HUP INT TERM
-
 printf 'ZIP Path: %s\n' "${ZIP_PATH}"
 printf 'Staged Module: %s\n' "${STAGE_MODULE_DIR}"
 printf 'Package: %s\n' "${PKG_NAME}"

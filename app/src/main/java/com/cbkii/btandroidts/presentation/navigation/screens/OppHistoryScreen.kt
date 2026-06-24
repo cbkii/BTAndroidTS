@@ -7,10 +7,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.domain.peripheral.OppTransferState
 import com.cbkii.btandroidts.presentation.feature_opp.OppHistoryViewModel
 import com.ramcosta.composedestinations.annotation.Destination
@@ -27,15 +29,15 @@ fun OppHistoryScreen(
     navigator: DestinationsNavigator
 ) {
     val viewModel = koinViewModel<OppHistoryViewModel>()
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Transfer History") },
+                title = { Text(stringResource(R.string.opp_history_title)) },
                 navigationIcon = {
                     IconButton(onClick = { navigator.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = stringResource(R.string.back_arrow))
                     }
                 }
             )
@@ -47,18 +49,23 @@ fun OppHistoryScreen(
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             item {
-                Text("Outbound transfers delegated to stock Android Bluetooth.", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.opp_history_stock_bluetooth_note), style = MaterialTheme.typography.bodySmall)
             }
 
-            items(state.history) { item ->
+            items(state.history, key = { it.id }) { item ->
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Transfer ${item.id.take(8)}", style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(R.string.opp_history_transfer_title, item.id.take(8)), style = MaterialTheme.typography.titleSmall)
                             Text(DateFormat.getDateTimeInstance().format(Date(item.createdAtMillis)), style = MaterialTheme.typography.labelSmall)
                         }
                         Text(item.summary, style = MaterialTheme.typography.bodyMedium)
-                        Text("Status: ${item.state}", style = MaterialTheme.typography.bodySmall, color = if (item.state == OppTransferState.COMPLETED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        Text(stringResource(R.string.opp_history_status, item.state), style = MaterialTheme.typography.bodySmall, color = if (item.state == OppTransferState.COMPLETED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        if (item.state == OppTransferState.QUEUED || item.state == OppTransferState.DELEGATED_TO_STOCK_OPP || item.state == OppTransferState.RUNNING) {
+                            TextButton(onClick = { viewModel.cancel(item.id) }) {
+                                Text(stringResource(R.string.dialog_action_cancel))
+                            }
+                        }
                     }
                 }
             }
