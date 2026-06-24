@@ -31,10 +31,10 @@ jobs:
       JAVA_DISTRIBUTION: temurin
       ANDROID_COMPILE_SDK: '36'
       ANDROID_BUILD_TOOLS: '36.0.0'
-      RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-      RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-      RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-      RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
     steps:
       - name: Checkout repository
@@ -93,15 +93,15 @@ jobs:
           store_path="${HOME}/keystore/${store_file_name}"
 
           have_real_signing=false
-          if [[ -n "${RELEASE_KEYSTORE_BASE64:-}" && -n "${RELEASE_KEYSTORE_PASSWORD:-}" && -n "${RELEASE_KEY_ALIAS:-}" && -n "${RELEASE_KEY_PASSWORD:-}" ]]; then
+          if [[ -n "${KEYSTORE_BASE64:-}" && -n "${KEYSTORE_PASSWORD:-}" && -n "${KEY_ALIAS:-}" && -n "${KEY_PASSWORD:-}" ]]; then
             have_real_signing=true
           fi
 
           if [[ "${have_real_signing}" == "true" ]]; then
-            printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 -d > "${store_path}"
-            store_password="${RELEASE_KEYSTORE_PASSWORD}"
-            key_alias="${RELEASE_KEY_ALIAS}"
-            key_password="${RELEASE_KEY_PASSWORD}"
+            printf '%s' "${KEYSTORE_BASE64}" | base64 -d > "${store_path}"
+            store_password="${KEYSTORE_PASSWORD}"
+            key_alias="${KEY_ALIAS}"
+            key_password="${KEY_PASSWORD}"
             signing_source="repository-secret"
           else
             echo "::warning::Release signing secrets are not fully configured. Generating a CI-only signing key. APKs will be installable but not suitable for stable upgrade continuity."
