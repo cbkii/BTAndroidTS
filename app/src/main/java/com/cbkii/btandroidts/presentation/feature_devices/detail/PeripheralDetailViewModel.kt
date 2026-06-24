@@ -1,5 +1,6 @@
 package com.cbkii.btandroidts.presentation.feature_devices.detail
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.cbkii.btandroidts.domain.peripheral.*
@@ -9,6 +10,8 @@ import com.cbkii.btandroidts.presentation.util.UiEvents
 import com.ramcosta.composedestinations.generated.navArgs
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class PeripheralDetailState(
     val device: UnifiedBluetoothDevice? = null,
@@ -42,6 +45,7 @@ class PeripheralDetailViewModel(
     override val uiEvents: SharedFlow<UiEvents> = _uiEvents.asSharedFlow()
 
     private val _isBusy = MutableStateFlow(false)
+    private val eventMutex = Mutex()
 
     val state: StateFlow<PeripheralDetailState> = combine(
         inventoryRepository.devices,
@@ -69,32 +73,38 @@ class PeripheralDetailViewModel(
     fun onEvent(event: PeripheralDetailEvent) {
         val addr = address ?: return
         viewModelScope.launch {
-            _isBusy.value = true
-            try {
-                when (event) {
+            eventMutex.withLock {
+                _isBusy.value = true
+                try {
+                    when (event) {
                     PeripheralDetailEvent.Save -> {
-                        val device = state.value.device ?: return@launch
                         policyStore.savePeripheral(
                             SavedPeripheralRecord(
                                 address = addr,
-                                displayName = device.displayName,
+                                displayName = displayNameForPolicy(),
                                 policy = ReconnectPolicy(),
                                 savedAtMillis = System.currentTimeMillis()
                             )
                         )
                     }
                     PeripheralDetailEvent.Forget -> {
-                        inventoryRepository.forgetSelected(addr).onSuccess {
-                            policyStore.removeSavedPeripheral(addr)
-                            _uiEvents.emit(UiEvents.NavigateBack)
-                        }
+                        inventoryRepository.forgetSelected(addr)
+                            .onSuccess {
+                                policyStore.removeSavedPeripheral(addr)
+                                _uiEvents.emit(UiEvents.NavigateBack)
+                            }
+                            .onFailure { error ->
+                                Log.w(TAG, "System unpair failed; removing saved peripheral policy", error)
+                                policyStore.removeSavedPeripheral(addr)
+                                _uiEvents.emit(UiEvents.ShowSnackBar("System unpair failed, but the saved peripheral record was removed."))
+                                _uiEvents.emit(UiEvents.NavigateBack)
+                            }
                     }
                     PeripheralDetailEvent.Protect -> {
-                        val device = state.value.device ?: return@launch
                         policyStore.protectDevice(
                             ProtectedPeripheralRecord(
                                 address = addr,
-                                displayName = device.displayName,
+                                displayName = displayNameForPolicy(),
                                 reason = "User protected",
                                 updatedAtMillis = System.currentTimeMillis()
                             )
@@ -102,14 +112,26 @@ class PeripheralDetailViewModel(
                     }
                     PeripheralDetailEvent.Unprotect -> policyStore.removeProtectedDevice(addr)
                     PeripheralDetailEvent.RetryManual -> _uiEvents.emit(UiEvents.ShowToast("Manual retry requested"))
-                    PeripheralDetailEvent.ConnectHid -> handleHidResult(hidHostController.connect(addr))
-                    PeripheralDetailEvent.DisconnectHid -> handleHidResult(hidHostController.disconnect(addr))
+                    PeripheralDetailEvent.ConnectHid -> handleHidResult(runHidOperation("connect") { hidHostController.connect(addr) })
+                    PeripheralDetailEvent.DisconnectHid -> handleHidResult(runHidOperation("disconnect") { hidHostController.disconnect(addr) })
+                    }
+                } finally {
+                    _isBusy.value = false
                 }
-            } finally {
-                _isBusy.value = false
             }
         }
     }
+
+    private fun displayNameForPolicy(): String = state.value.device?.displayName ?: args?.name ?: "Unknown Device"
+
+    private suspend fun runHidOperation(
+        operationName: String,
+        operation: suspend () -> HidOperationResult,
+    ): HidOperationResult = runCatching { operation() }
+        .getOrElse { error ->
+            Log.e(TAG, "HID $operationName operation failed before returning a result", error)
+            HidOperationResult.Failed("HID $operationName failed on this TS18 build; collect diagnostics for validation")
+        }
 
     private suspend fun handleHidResult(result: HidOperationResult) {
         val msg = when (result) {
@@ -120,5 +142,9 @@ class PeripheralDetailViewModel(
             HidOperationResult.Started -> "HID started"
         }
         _uiEvents.emit(UiEvents.ShowSnackBar(msg))
+    }
+
+    companion object {
+        private const val TAG = "PeripheralDetailViewModel"
     }
 }

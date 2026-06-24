@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.domain.peripheral.OppTransferState
@@ -28,6 +29,7 @@ fun OppHistoryScreen(
 ) {
     val viewModel = koinViewModel<OppHistoryViewModel>()
     val state by viewModel.state.collectAsState()
+    val dateFormat = remember { DateFormat.getDateTimeInstance() }
 
     Scaffold(
         topBar = {
@@ -55,7 +57,7 @@ fun OppHistoryScreen(
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Transfer ${item.id.take(8)}", style = MaterialTheme.typography.titleSmall)
-                            Text(DateFormat.getDateTimeInstance().format(Date(item.createdAtMillis)), style = MaterialTheme.typography.labelSmall)
+                            Text(dateFormat.format(Date(item.createdAtMillis)), style = MaterialTheme.typography.labelSmall)
                         }
                         Text(item.summary, style = MaterialTheme.typography.bodyMedium)
                         Text("Status: ${item.state}", style = MaterialTheme.typography.bodySmall, color = if (item.state == OppTransferState.COMPLETED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)

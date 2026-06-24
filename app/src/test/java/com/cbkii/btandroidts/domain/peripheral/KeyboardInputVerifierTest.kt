@@ -1,6 +1,5 @@
 package com.cbkii.btandroidts.domain.peripheral
 
-import com.cbkii.btandroidts.presentation.navigation.screens.KeyboardInputVerifier
 import com.cbkii.btandroidts.domain.bluetooth.enums.BluetoothMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -33,6 +32,17 @@ class KeyboardInputVerifierTest {
         )
         val matches = KeyboardInputVerifier.matchingBondedDevices(listOf(first, second), inputs)
         assertEquals(listOf(first, second), matches)
+    }
+
+    @Test
+    fun matchingReturnsSingleBondedKeyboardForCompactMacAddress() {
+        val target = device("00:11:22:33:44:55")
+        val other = device("66:77:88:99:AA:BB")
+        val inputs = listOf(input("BT keyboard 001122334455"))
+
+        val matches = KeyboardInputVerifier.matchingBondedDevices(listOf(target, other), inputs)
+
+        assertEquals(listOf(target), matches)
     }
 
     @Test

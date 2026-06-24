@@ -2,6 +2,7 @@ package com.cbkii.btandroidts.presentation.navigation.screens
 
 import android.content.Intent
 import android.provider.Settings
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,11 +19,15 @@ import com.cbkii.btandroidts.domain.peripheral.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,13 +42,25 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
     Scaffold(topBar = { TopAppBar(title = { Text("Keyboard Test") }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
         Row(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = 55.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(value = text, onValueChange = { oldText ->
-                    if (KeyboardInputVerifier.shouldStartVerification(text, oldText, false, null)) {
-                         viewModel.recordSuccess()
+                OutlinedTextField(value = text, onValueChange = { newText ->
+                    text = newText
+                    if (newText.isNotEmpty()) {
+                        viewModel.recordSuccessOnce()
                     }
-                    text = oldText
                 }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Type here...") })
-                Button(onClick = { try { context.startActivity(Intent(Settings.ACTION_HARD_KEYBOARD_SETTINGS)) } catch (e: Exception) { context.startActivity(Intent(Settings.ACTION_SETTINGS)) } }) { Text("Settings") }
+                state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                Button(onClick = {
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_HARD_KEYBOARD_SETTINGS))
+                    } catch (keyboardSettingsError: Exception) {
+                        Log.w(KEYBOARD_TEST_TAG, "Unable to open hard keyboard settings", keyboardSettingsError)
+                        try {
+                            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                        } catch (settingsError: Exception) {
+                            Log.e(KEYBOARD_TEST_TAG, "Unable to open Android settings fallback", settingsError)
+                        }
+                    }
+                }) { Text("Settings") }
             }
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Detected Input Devices", style = MaterialTheme.typography.titleMedium)
@@ -60,33 +77,87 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
     }
 }
 
-data class KeyboardTestState(val inputDevices: List<AndroidInputDeviceInfo> = emptyList())
+data class KeyboardTestState(
+    val inputDevices: List<AndroidInputDeviceInfo> = emptyList(),
+    val verificationInProgress: Boolean = false,
+    val verificationAttempted: Boolean = false,
+    val verifiedAddress: BluetoothAddress? = null,
+    val message: String? = null,
+)
 
 class KeyboardTestViewModel(private val inputDeviceRepository: InputDeviceRepository, private val inventoryRepository: BluetoothDeviceInventoryRepository) : ViewModel() {
-    val state: StateFlow<KeyboardTestState> = combine(inventoryRepository.devices) { _ -> KeyboardTestState(inputDeviceRepository.listInputDevices()) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), KeyboardTestState())
-    fun recordSuccess() {
+    private val _state = MutableStateFlow(KeyboardTestState())
+    val state: StateFlow<KeyboardTestState> = _state.asStateFlow()
+    private var refreshJob: Job? = null
+
+    init {
+        refreshInputDevices()
         viewModelScope.launch {
-            val inputs = inputDeviceRepository.listInputDevices()
-            inventoryRepository.devices.value
-                .filter { it.bondState == BondStatus.BONDED }
-                .filter { dev -> KeyboardInputVerifier.matchingBondedDevices(listOf(dev), inputs).isNotEmpty() }
-                .forEach { inputDeviceRepository.recordVerification(it.address, true) }
+            inventoryRepository.devices.collect { refreshInputDevices() }
         }
     }
-}
 
-object KeyboardInputVerifier {
-    fun shouldStartVerification(old: String, new: String, alreadyAttempted: Boolean, verifiedAddress: BluetoothAddress?): Boolean {
-        return old.isEmpty() && new.isNotEmpty() && !alreadyAttempted && verifiedAddress == null
+    fun refreshInputDevices() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            try {
+                val inputs = withContext(Dispatchers.Default) { inputDeviceRepository.listInputDevices() }
+                _state.value = _state.value.copy(inputDevices = inputs)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(KEYBOARD_TEST_TAG, "Failed to refresh input devices", e)
+                _state.value = _state.value.copy(message = "Unable to refresh input devices; retry from Settings.")
+            }
+        }
     }
 
-    fun matchingBondedDevices(bondedDevices: List<UnifiedBluetoothDevice>, inputs: List<AndroidInputDeviceInfo>): List<UnifiedBluetoothDevice> {
-        val keyboardInputs = inputs.filter { it.isKeyboard }
-        return bondedDevices.filter { dev ->
-            dev.bondState == BondStatus.BONDED && keyboardInputs.any { input ->
-                val cleanAddr = dev.address.value.replace(":", "").uppercase()
-                input.name.contains(cleanAddr, ignoreCase = true) || input.descriptor.contains(cleanAddr, ignoreCase = true)
+    fun recordSuccessOnce() {
+        val current = _state.value
+        if (current.verificationInProgress || current.verificationAttempted || current.verifiedAddress != null) return
+        _state.value = current.copy(verificationInProgress = true, message = null)
+        viewModelScope.launch {
+            try {
+                val inputs = withContext(Dispatchers.Default) { inputDeviceRepository.listInputDevices() }
+                _state.value = _state.value.copy(inputDevices = inputs)
+                val matches = withContext(Dispatchers.Default) {
+                    KeyboardInputVerifier.matchingBondedDevices(inventoryRepository.devices.value, inputs)
+                }
+                when (matches.size) {
+                    1 -> {
+                        val address = matches.single().address
+                        val existing = inputDeviceRepository.getVerificationResult(address).first()
+                        if (existing?.success != true) {
+                            inputDeviceRepository.recordVerification(address, true)
+                        }
+                        _state.value = _state.value.copy(
+                            verifiedAddress = address,
+                            verificationAttempted = true,
+                            message = "Keyboard verified for ${address.value}.",
+                        )
+                    }
+                    0 -> _state.value = _state.value.copy(
+                        verificationAttempted = false,
+                        message = "No bonded keyboard matched this input; type again to retry.",
+                    )
+                    else -> _state.value = _state.value.copy(
+                        verificationAttempted = false,
+                        message = "Multiple bonded keyboards matched; narrow the target and retry.",
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(KEYBOARD_TEST_TAG, "Failed to persist keyboard verification", e)
+                _state.value = _state.value.copy(
+                    verificationAttempted = false,
+                    message = "Keyboard verification could not be saved; type again to retry.",
+                )
+            } finally {
+                _state.value = _state.value.copy(verificationInProgress = false)
             }
         }
     }
 }
+
+private const val KEYBOARD_TEST_TAG = "KeyboardTest"
