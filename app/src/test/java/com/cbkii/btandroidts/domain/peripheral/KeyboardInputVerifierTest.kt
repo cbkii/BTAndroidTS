@@ -1,5 +1,7 @@
 package com.cbkii.btandroidts.domain.peripheral
 
+import com.cbkii.btandroidts.presentation.navigation.screens.KeyboardInputVerifier
+import com.cbkii.btandroidts.domain.bluetooth.enums.BluetoothMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -54,7 +56,7 @@ class KeyboardInputVerifierTest {
             address = BluetoothAddress.requireValid(address),
             displayName = address,
             transports = setOf(DeviceTransport.CLASSIC),
-            mode = com.cbkii.btandroidts.domain.bluetooth.enums.BluetoothMode.BLUETOOTH_DEVICE,
+            mode = BluetoothMode.BLUETOOTH_DEVICE_CLASSIC,
             deviceType = null,
             rssi = null,
             bondState = bondStatus,

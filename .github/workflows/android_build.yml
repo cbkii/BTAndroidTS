@@ -156,7 +156,6 @@ jobs:
           name: btandroidts-pr-build-reports
           path: |
             app/build/reports/**
-            app/build/test-results/**
             build/reports/problems/**
             app/build/outputs/logs/**
           if-no-files-found: ignore
