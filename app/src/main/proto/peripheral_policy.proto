@@ -9,6 +9,7 @@ message PeripheralPolicyPreferences {
   repeated SavedPeripheralPreference saved_peripherals = 3;
   repeated ProtectedDevicePreference protected_devices = 4;
   repeated RetryStatePreference retry_states = 5;
+  repeated InputVerificationPreference input_verifications = 6;
 }
 
 message SavedPeripheralPreference {
@@ -41,4 +42,10 @@ message RetryStatePreference {
   int32 attempt = 2;
   int64 next_attempt_at_millis = 3;
   string last_error = 4;
+}
+
+message InputVerificationPreference {
+  string address = 1;
+  bool success = 2;
+  int64 timestamp_millis = 3;
 }

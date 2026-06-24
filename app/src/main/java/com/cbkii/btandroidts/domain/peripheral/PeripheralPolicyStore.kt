@@ -15,6 +15,7 @@ interface PeripheralPolicyStore {
 	suspend fun setRetryState(address: BluetoothAddress, retryState: PeripheralRetryState?)
 	suspend fun recordResult(address: BluetoothAddress, result: String, atMillis: Long)
 	suspend fun applyReconnectResults(results: List<PeripheralReconnectResult>)
+	suspend fun recordInputVerification(address: BluetoothAddress, success: Boolean, atMillis: Long)
 }
 
 data class PeripheralPolicy(
@@ -23,6 +24,7 @@ data class PeripheralPolicy(
 	val savedPeripherals: List<SavedPeripheralRecord> = emptyList(),
 	val protectedDevices: List<ProtectedPeripheralRecord> = emptyList(),
 	val retryStates: Map<BluetoothAddress, PeripheralRetryState> = emptyMap(),
+	val inputVerifications: Map<BluetoothAddress, InputVerificationResult> = emptyMap(),
 )
 
 data class SavedPeripheralRecord(

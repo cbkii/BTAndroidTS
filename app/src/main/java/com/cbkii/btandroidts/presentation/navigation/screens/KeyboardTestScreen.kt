@@ -1,100 +1,163 @@
 package com.cbkii.btandroidts.presentation.navigation.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import android.content.Intent
+import android.provider.Settings
+import android.util.Log
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.cbkii.btandroidts.R
-import com.cbkii.btandroidts.presentation.navigation.config.Routes
-import com.cbkii.btandroidts.ui.theme.BTAndroidTSTheme
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.cbkii.btandroidts.domain.peripheral.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Destination<RootGraph>(
-	route = Routes.KEYBOARD_TEST_ROUTE
+@Destination<RootGraph>
+@Composable
+fun KeyboardTest(navigator: DestinationsNavigator) {
+    val viewModel = koinViewModel<KeyboardTestViewModel>()
+    val state by viewModel.state.collectAsState(KeyboardTestState())
+    val context = LocalContext.current
+    var text by remember { mutableStateOf("") }
+
+    Scaffold(topBar = { TopAppBar(title = { Text("Keyboard Test") }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
+        Row(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = 55.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(value = text, onValueChange = { newText ->
+                    text = newText
+                    if (newText.isNotEmpty()) {
+                        viewModel.recordSuccessOnce()
+                    }
+                }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Type here...") })
+                state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                Button(onClick = {
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_HARD_KEYBOARD_SETTINGS))
+                    } catch (keyboardSettingsError: Exception) {
+                        Log.w(KEYBOARD_TEST_TAG, "Unable to open hard keyboard settings", keyboardSettingsError)
+                        try {
+                            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                        } catch (settingsError: Exception) {
+                            Log.e(KEYBOARD_TEST_TAG, "Unable to open Android settings fallback", settingsError)
+                        }
+                    }
+                }) { Text("Settings") }
+            }
+            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Detected Input Devices", style = MaterialTheme.typography.titleMedium)
+                state.inputDevices.forEach { device ->
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            Text(device.name, style = MaterialTheme.typography.bodyMedium)
+                            Text("Type: ${if (device.isKeyboard) "Keyboard" else "Other"}", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class KeyboardTestState(
+    val inputDevices: List<AndroidInputDeviceInfo> = emptyList(),
+    val verificationInProgress: Boolean = false,
+    val verificationAttempted: Boolean = false,
+    val verifiedAddress: BluetoothAddress? = null,
+    val message: String? = null,
 )
-@Composable
-fun KeyboardTestScreen(
-	navigator: DestinationsNavigator
-) {
-	var text by remember { mutableStateOf("") }
-	var lastChar by remember { mutableStateOf("") }
 
-	Scaffold(
-		topBar = {
-			TopAppBar(
-				title = { Text(stringResource(R.string.keyboard_test_title)) },
-				navigationIcon = {
-					IconButton(onClick = { navigator.popBackStack() }) {
-						Icon(
-							imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-							contentDescription = stringResource(R.string.back_arrow)
-						)
-					}
-				}
-			)
-		}
-	) { paddingValues ->
-		Column(
-			modifier = Modifier
-				.fillMaxSize()
-				.padding(paddingValues)
-				.padding(16.dp),
-			verticalArrangement = Arrangement.spacedBy(16.dp)
-		) {
-			Text(
-				text = stringResource(R.string.keyboard_test_desc),
-				style = MaterialTheme.typography.bodyLarge
-			)
+class KeyboardTestViewModel(private val inputDeviceRepository: InputDeviceRepository, private val inventoryRepository: BluetoothDeviceInventoryRepository) : ViewModel() {
+    private val _state = MutableStateFlow(KeyboardTestState())
+    val state: StateFlow<KeyboardTestState> = _state.asStateFlow()
+    private var refreshJob: Job? = null
 
-			OutlinedTextField(
-				value = text,
-				onValueChange = {
-					text = it
-					if (it.isNotEmpty()) {
-						lastChar = it.last().toString()
-					}
-				},
-				modifier = Modifier.fillMaxWidth(),
-				placeholder = { Text(stringResource(R.string.keyboard_test_placeholder)) },
-				label = { Text(stringResource(R.string.keyboard_test_title)) }
-			)
+    init {
+        refreshInputDevices()
+        viewModelScope.launch {
+            inventoryRepository.devices.collect { refreshInputDevices() }
+        }
+    }
 
-			if (lastChar.isNotEmpty()) {
-				Text(
-					text = stringResource(R.string.keyboard_test_last_char, lastChar),
-					style = MaterialTheme.typography.headlineMedium,
-					color = MaterialTheme.colorScheme.primary
-				)
-			}
-		}
-	}
+    fun refreshInputDevices() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            try {
+                val inputs = withContext(Dispatchers.Default) { inputDeviceRepository.listInputDevices() }
+                _state.value = _state.value.copy(inputDevices = inputs)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(KEYBOARD_TEST_TAG, "Failed to refresh input devices", e)
+                _state.value = _state.value.copy(message = "Unable to refresh input devices; retry from Settings.")
+            }
+        }
+    }
+
+    fun recordSuccessOnce() {
+        val current = _state.value
+        if (current.verificationInProgress || current.verificationAttempted || current.verifiedAddress != null) return
+        _state.value = current.copy(verificationInProgress = true, message = null)
+        viewModelScope.launch {
+            try {
+                val inputs = withContext(Dispatchers.Default) { inputDeviceRepository.listInputDevices() }
+                _state.value = _state.value.copy(inputDevices = inputs)
+                val matches = withContext(Dispatchers.Default) {
+                    KeyboardInputVerifier.matchingBondedDevices(inventoryRepository.devices.value, inputs)
+                }
+                when (matches.size) {
+                    1 -> {
+                        val address = matches.single().address
+                        val existing = inputDeviceRepository.getVerificationResult(address).first()
+                        if (existing?.success != true) {
+                            inputDeviceRepository.recordVerification(address, true)
+                        }
+                        _state.value = _state.value.copy(
+                            verifiedAddress = address,
+                            verificationAttempted = true,
+                            message = "Keyboard verified for ${address.value}.",
+                        )
+                    }
+                    0 -> _state.value = _state.value.copy(
+                        verificationAttempted = false,
+                        message = "No bonded keyboard matched this input; type again to retry.",
+                    )
+                    else -> _state.value = _state.value.copy(
+                        verificationAttempted = false,
+                        message = "Multiple bonded keyboards matched; narrow the target and retry.",
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(KEYBOARD_TEST_TAG, "Failed to persist keyboard verification", e)
+                _state.value = _state.value.copy(
+                    verificationAttempted = false,
+                    message = "Keyboard verification could not be saved; type again to retry.",
+                )
+            } finally {
+                _state.value = _state.value.copy(verificationInProgress = false)
+            }
+        }
+    }
 }
 
-@Preview(showBackground = true, widthDp = 1280, heightDp = 720)
-@Composable
-private fun KeyboardTestScreenPreview() = BTAndroidTSTheme {
-	KeyboardTestScreen(navigator = com.ramcosta.composedestinations.navigation.EmptyDestinationsNavigator)
-}
+private const val KEYBOARD_TEST_TAG = "KeyboardTest"

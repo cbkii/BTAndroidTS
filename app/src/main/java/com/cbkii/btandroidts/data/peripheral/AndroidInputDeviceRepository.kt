@@ -1,11 +1,13 @@
 package com.cbkii.btandroidts.data.peripheral
 
 import android.view.InputDevice
-import com.cbkii.btandroidts.domain.peripheral.AndroidInputDeviceInfo
-import com.cbkii.btandroidts.domain.peripheral.BluetoothAddress
-import com.cbkii.btandroidts.domain.peripheral.InputDeviceRepository
+import com.cbkii.btandroidts.domain.peripheral.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
-class AndroidInputDeviceRepository : InputDeviceRepository {
+class AndroidInputDeviceRepository(
+	private val policyStore: PeripheralPolicyStore,
+) : InputDeviceRepository {
 	override fun listInputDevices(): List<AndroidInputDeviceInfo> =
 		InputDevice.getDeviceIds()
 			.asSequence()
@@ -29,5 +31,12 @@ class AndroidInputDeviceRepository : InputDeviceRepository {
 				device.descriptor.contains(compact, ignoreCase = true) ||
 				device.name.contains(address.value, ignoreCase = true)
 		}
+	}
+
+	override fun getVerificationResult(address: BluetoothAddress): Flow<InputVerificationResult?> =
+		policyStore.policy.map { it.inputVerifications[address] }
+
+	override suspend fun recordVerification(address: BluetoothAddress, success: Boolean) {
+		policyStore.recordInputVerification(address, success, System.currentTimeMillis())
 	}
 }

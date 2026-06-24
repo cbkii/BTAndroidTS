@@ -7,6 +7,7 @@ plugins {
 	alias(libs.plugins.kotlinx.serialization)
 	alias(libs.plugins.google.protobuf)
 	alias(libs.plugins.compose.compiler)
+    id("kotlin-parcelize")
 }
 
 android {

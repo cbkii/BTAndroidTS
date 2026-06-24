@@ -69,6 +69,10 @@ class LocalTs18DiagnosticsCollector(
 			policy.retryStates.forEach { (address, retry) ->
 				add("retry address=${redactAddress(address.value)} attempt=${retry.attempt} next=${retry.nextAttemptAtMillis}")
 			}
+            add("input.verification.count=${policy.inputVerifications.size}")
+            policy.inputVerifications.forEach { (address, result) ->
+                add("input.verification address=${redactAddress(address.value)} success=${result.success} timestamp=${result.timestampMillis}")
+            }
 			add("input.count=${inputDevices.size}")
 			inputDevices.forEach { input ->
 				add("input id=${input.id} name=${input.name} keyboard=${input.isKeyboard} pointer=${input.isPointer}")
