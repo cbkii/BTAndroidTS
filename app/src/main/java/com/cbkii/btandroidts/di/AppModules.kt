@@ -10,6 +10,7 @@ val appModule = module {
 		peripheralModule,
 		viewModelModule,
 		settingsModule,
-		deviceModule
+		deviceModule,
+		phoneKeyboardModule
 	)
 }
