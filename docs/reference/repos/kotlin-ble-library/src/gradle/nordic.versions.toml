@@ -1,0 +1,13 @@
+# Versions of Nordic libraries used in this project.
+
+# This is a subset of the Version Catalog available at https://github.com/nordicsemi/Nordic-Version-Catalog
+# The version catalog can be updated independently of this project after the release of this library.
+
+[versions]
+util = "1.2.0" # https://github.com/nordicsemi/Kotlin-Util-Library
+
+[libraries]
+id         = { group = "no.nordicsemi.kotlin", name = "id",          version.ref = "util" }
+log        = { group = "no.nordicsemi.kotlin", name = "log",         version.ref = "util" }
+log-timber = { group = "no.nordicsemi.kotlin", name = "log-timber",  version.ref = "util" }
+data       = { group = "no.nordicsemi.kotlin", name = "data",        version.ref = "util" }

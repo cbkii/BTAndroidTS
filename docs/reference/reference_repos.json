@@ -1,0 +1,214 @@
+{
+  "repositories": [
+    {
+      "slug": "kontroller",
+      "name": "raghavk92/Kontroller",
+      "url": "https://github.com/raghavk92/Kontroller.git",
+      "web": "https://github.com/raghavk92/Kontroller",
+      "license": "Apache-2.0",
+      "priority": "high",
+      "category": "sender-side Android BluetoothHidDevice app",
+      "why": "Android phone as mouse/keyboard using the public Android 9+ Bluetooth HID Device profile. Useful for sender-app lifecycle, SDP registration and UX constraints.",
+      "use_for": [
+        "phone-side setup checklist",
+        "BluetoothHidDevice lifecycle examples",
+        "keyboard/mouse report flow",
+        "compatibility caveats"
+      ],
+      "caution": "Sender-side precedent only. Do not import UI or app assumptions into TS18 host workflow. Android phone must remain peripheral; TS18 remains host."
+    },
+    {
+      "slug": "hidperipheral",
+      "name": "LiangLuDev/HidPeripheral",
+      "url": "https://github.com/LiangLuDev/HidPeripheral.git",
+      "web": "https://github.com/LiangLuDev/HidPeripheral",
+      "license": "Unverified from search; inspect LICENSE before reuse",
+      "priority": "high",
+      "category": "sender-side Android BluetoothHidDevice app",
+      "why": "Small Android HID Device mouse/keyboard simulation app; likely useful for getProfileProxy/registerApp/SdpSettings/report descriptor examples.",
+      "use_for": [
+        "minimal HID device registration flow",
+        "report descriptor shape",
+        "phone compatibility failure modes"
+      ],
+      "caution": "Inspect licence and code age before copying. Reference behaviour only unless licence is confirmed."
+    },
+    {
+      "slug": "usbtoblhid",
+      "name": "T-Dynamos/USBtoBLHid",
+      "url": "https://github.com/T-Dynamos/USBtoBLHid.git",
+      "web": "https://github.com/T-Dynamos/USBtoBLHid",
+      "license": "MIT",
+      "priority": "medium-high",
+      "category": "Android USB HID to Bluetooth HID Device bridge",
+      "why": "Android registers as Bluetooth HID Device, listens to USB keyboard/mouse input and sends HID reports over Bluetooth. Useful for report conversion and connected-host state handling.",
+      "use_for": [
+        "sendReport/report-map patterns",
+        "input-to-HID conversion",
+        "foreground service behaviour"
+      ],
+      "caution": "This is a sender/bridge app, not a TS18 HID Host implementation. Do not adapt USB-host assumptions to BTAndroidTS host pairing flow."
+    },
+    {
+      "slug": "ble-hid-peripheral-for-android",
+      "name": "kshoji/BLE-HID-Peripheral-for-Android",
+      "url": "https://github.com/kshoji/BLE-HID-Peripheral-for-Android.git",
+      "web": "https://github.com/kshoji/BLE-HID-Peripheral-for-Android",
+      "license": "Apache-2.0",
+      "priority": "high",
+      "category": "BLE/HOGP peripheral library",
+      "why": "Android BLE HID over GATT profile library; Android behaves as BLE mouse/keyboard/joystick. Useful for HOGP service/report evidence and host expectations.",
+      "use_for": [
+        "BLE HID service UUID 0x1812",
+        "GATT characteristic/report-map references",
+        "HOGP compatibility guidance"
+      ],
+      "caution": "BTAndroidTS should not become a BLE HID peripheral; use this to recognise and classify phone apps that expose HOGP."
+    },
+    {
+      "slug": "ble-hid-example",
+      "name": "Aleksander-Drewnicki/BLE_HID_EXAMPLE",
+      "url": "https://github.com/Aleksander-Drewnicki/BLE_HID_EXAMPLE.git",
+      "web": "https://github.com/Aleksander-Drewnicki/BLE_HID_EXAMPLE",
+      "license": "Apache-2.0",
+      "priority": "medium",
+      "category": "BLE/HOGP peripheral example",
+      "why": "Android peripheral/server app emulating BLE HID mouse/keyboard. Useful as a compact HOGP example to cross-check service and report-map assumptions.",
+      "use_for": [
+        "HOGP peripheral setup",
+        "basic vs advanced mode compatibility",
+        "service discovery expectations"
+      ],
+      "caution": "Example app. Use only as precedent for expected BLE evidence; not as production host code."
+    },
+    {
+      "slug": "android-scanner-compat-library",
+      "name": "NordicSemiconductor/Android-Scanner-Compat-Library",
+      "url": "https://github.com/NordicSemiconductor/Android-Scanner-Compat-Library.git",
+      "web": "https://github.com/NordicSemiconductor/Android-Scanner-Compat-Library",
+      "license": "BSD-3-Clause",
+      "priority": "high",
+      "category": "BLE scanning compatibility library",
+      "why": "A long-lived BLE scanner compatibility library handling Android API changes, hardware filtering/batching and scan settings. Useful for staged scan design and fallback thinking.",
+      "use_for": [
+        "scan settings compatibility",
+        "bounded scan callbacks",
+        "match-lost/device TTL ideas",
+        "legacy vs extended advertising handling"
+      ],
+      "caution": "Do not add a dependency without size/API29/TS18 validation. Inspect as design reference first."
+    },
+    {
+      "slug": "android-ble-library",
+      "name": "NordicSemiconductor/Android-BLE-Library",
+      "url": "https://github.com/NordicSemiconductor/Android-BLE-Library.git",
+      "web": "https://github.com/NordicSemiconductor/Android-BLE-Library",
+      "license": "BSD-3-Clause",
+      "priority": "medium",
+      "category": "BLE client/GATT architecture library",
+      "why": "Production-oriented Android BLE library for GATT connection management. It explicitly separates scanning from connection management and points to scanner compat for scanning.",
+      "use_for": [
+        "GATT state machine structure",
+        "reconnect/error taxonomy ideas",
+        "bounded callback handling"
+      ],
+      "caution": "Do not use it as proof of TS18 runtime behaviour; dependency adoption requires validation and binary impact review."
+    },
+    {
+      "slug": "kotlin-ble-library",
+      "name": "nordicsemi/Kotlin-BLE-Library",
+      "url": "https://github.com/nordicsemi/Kotlin-BLE-Library.git",
+      "web": "https://github.com/nordicsemi/Kotlin-BLE-Library",
+      "license": "BSD-3-Clause",
+      "priority": "medium",
+      "category": "Kotlin BLE/coroutines architecture library",
+      "why": "Modern Kotlin/coroutines BLE wrapper. Useful for Flow/state modelling ideas compatible with BTAndroidTS' Kotlin/Compose direction.",
+      "use_for": [
+        "coroutine boundary patterns",
+        "typed BLE state",
+        "structured cancellation"
+      ],
+      "caution": "Beta/newer library. Do not adopt wholesale for Android 10 TS18 without careful dependency and API29 testing."
+    },
+    {
+      "slug": "blessed-android",
+      "name": "weliem/blessed-android",
+      "url": "https://github.com/weliem/blessed-android.git",
+      "web": "https://github.com/weliem/blessed-android",
+      "license": "MIT",
+      "priority": "medium",
+      "category": "BLE client/peripheral helper library",
+      "why": "Compact Android BLE library with broad real-world use. Useful for comparing connection management, callback threading and error handling.",
+      "use_for": [
+        "BLE central/peripheral callback policy",
+        "connection retry boundaries",
+        "Android version compatibility notes"
+      ],
+      "caution": "Reference only unless adopted behind BTAndroidTS adapters with API29 and TS18 validation."
+    },
+    {
+      "slug": "opendroneid-receiver-android",
+      "name": "opendroneid/receiver-android",
+      "url": "https://github.com/opendroneid/receiver-android.git",
+      "web": "https://github.com/opendroneid/receiver-android",
+      "license": "Inspect upstream",
+      "priority": "medium",
+      "category": "Android BLE scanner app using extended advertising",
+      "why": "Real app precedent for extended BLE scanning, capability checks and low-latency scan settings. Useful for staged scan pass implementation.",
+      "use_for": [
+        "setLegacy(false) guard patterns",
+        "PHY capability checks",
+        "foreground scan UX"
+      ],
+      "caution": "Different domain; only use scanner mechanics and validation mindset."
+    },
+    {
+      "slug": "emubthid",
+      "name": "Alkaid-Benetnash/EmuBTHID",
+      "url": "https://github.com/Alkaid-Benetnash/EmuBTHID.git",
+      "web": "https://github.com/Alkaid-Benetnash/EmuBTHID",
+      "license": "Inspect upstream",
+      "priority": "low-medium",
+      "category": "BlueZ Classic Bluetooth HID Device emulator",
+      "why": "Classic Bluetooth HID Device precedent on Linux/BlueZ; registers HID service UUID 00001124 and exposes keyboard/mouse. Useful to distinguish Classic HID from BLE/HOGP.",
+      "use_for": [
+        "Classic HID terminology",
+        "HID SDP/service UUID",
+        "host expectations"
+      ],
+      "caution": "Linux/BlueZ/root precedent only. Do not apply BlueZ commands or privileged port assumptions to TS18 Android."
+    }
+  ],
+  "official_refs": [
+    {
+      "slug": "official-android-bluetoothhiddevice",
+      "name": "Android BluetoothHidDevice API reference",
+      "url": "https://developer.android.com/reference/android/bluetooth/BluetoothHidDevice",
+      "why": "Primary source for phone-side HID Device lifecycle: registerApp, foreground/registration requirement, sendReport interrupt-channel semantics."
+    },
+    {
+      "slug": "official-android-bluetoothlescanner",
+      "name": "Android BluetoothLeScanner API reference",
+      "url": "https://developer.android.com/reference/android/bluetooth/le/BluetoothLeScanner",
+      "why": "Primary source for BLE scan behaviour, including unfiltered scan screen-off behaviour and Android 10 location permission requirement."
+    },
+    {
+      "slug": "official-android-scansettings-builder",
+      "name": "Android ScanSettings.Builder API reference",
+      "url": "https://developer.android.com/reference/android/bluetooth/le/ScanSettings.Builder",
+      "why": "Primary source for setLegacy, setPhy, setReportDelay and low-latency scan mode behaviour."
+    },
+    {
+      "slug": "aosp-hidhostservice",
+      "name": "AOSP HidHostService.java",
+      "url": "https://android.googlesource.com/platform/packages/apps/Bluetooth/+/refs/heads/master/src/com/android/bluetooth/hid/HidHostService.java",
+      "why": "AOSP source reference for HID Host state/policy and hidden/privileged boundaries."
+    },
+    {
+      "slug": "aosp-bluetooth-architecture",
+      "name": "AOSP Bluetooth architecture documentation",
+      "url": "https://source.android.com/docs/core/connect/bluetooth",
+      "why": "Architecture reference for Android Bluetooth app, Binder/JNI and stack/HAL separation."
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+/*
+ * Copyright (c) 2024, Nordic Semiconductor
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are
+ * permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this list of
+ * conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list
+ * of conditions and the following disclaimer in the documentation and/or other materials
+ * provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors may be
+ * used to endorse or promote products derived from this software without specific prior
+ * written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+ * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+plugins {
+    // This plugin is added here only for readability.
+    // It is automatically applied by the `libs.plugins.nordic.publish.kmp` plugin below.
+    alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.kotlin.parcelize) apply false
+
+    // Nordic plugins are defined in https://github.com/nordicsemi/Nordic-Gradle-Plugins
+    alias(libs.plugins.nordic.android.application) apply false
+    alias(libs.plugins.nordic.android.library) apply false
+    alias(libs.plugins.nordic.android.kmp.library) apply false
+    alias(libs.plugins.nordic.kotlin) apply false
+    alias(libs.plugins.nordic.feature.compose) apply false
+    alias(libs.plugins.nordic.feature.hilt.compose) apply false
+    alias(libs.plugins.nordic.publish.android) apply false
+    alias(libs.plugins.nordic.publish.jvm) apply false
+    alias(libs.plugins.nordic.publish.kmp) apply false
+
+    // This applies Nordic look & feel to generated Dokka documentation.
+    // https://github.com/nordicsemi/Nordic-Gradle-Plugins/blob/main/plugins/src/main/kotlin/NordicDokkaPlugin.kt
+    alias(libs.plugins.nordic.dokka) apply true
+}
+
+// Configure main Dokka page
+dokka {
+    pluginsConfiguration.html {
+        homepageLink.set("https://github.com/nordicsemi/Kotlin-BLE-Library")
+    }
+}

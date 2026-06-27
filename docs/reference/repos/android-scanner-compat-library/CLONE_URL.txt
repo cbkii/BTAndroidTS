@@ -1,0 +1,1 @@
+https://github.com/NordicSemiconductor/Android-Scanner-Compat-Library.git

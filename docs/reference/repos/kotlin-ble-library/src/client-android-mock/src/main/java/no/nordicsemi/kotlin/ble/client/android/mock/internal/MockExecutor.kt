@@ -1,0 +1,211 @@
+/*
+ * Copyright (c) 2024, Nordic Semiconductor
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are
+ * permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this list of
+ * conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list
+ * of conditions and the following disclaimer in the documentation and/or other materials
+ * provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors may be
+ * used to endorse or promote products derived from this software without specific prior
+ * written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+ * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+@file:Suppress("unused")
+
+package no.nordicsemi.kotlin.ble.client.android.mock.internal
+
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withTimeout
+import no.nordicsemi.kotlin.ble.client.android.ConnectionPriority
+import no.nordicsemi.kotlin.ble.client.android.Peripheral
+import no.nordicsemi.kotlin.ble.client.mock.PeripheralSpec
+import no.nordicsemi.kotlin.ble.client.mock.internal.MockExecutor
+import no.nordicsemi.kotlin.ble.client.mock.internal.MockScanResult
+import no.nordicsemi.kotlin.ble.core.BondState
+import no.nordicsemi.kotlin.ble.core.ConnectionParameters
+import no.nordicsemi.kotlin.ble.core.PeripheralType
+import no.nordicsemi.kotlin.ble.core.Phy
+import no.nordicsemi.kotlin.ble.core.PhyOption
+import no.nordicsemi.kotlin.ble.core.android.AndroidEnvironment
+import no.nordicsemi.kotlin.ble.environment.android.mock.MockAndroidEnvironment
+import org.jetbrains.annotations.Range
+import kotlin.time.Duration.Companion.seconds
+
+/**
+ * A mock implementation of [Peripheral] for Android.
+ *
+ * @param peripheralSpec The peripheral specification.
+ * @param name Name of the peripheral read from the advertisement data or peripheral spec
+ * when it was connected / bonded before.
+ * @param environment The mock environment.
+ * @param advertisements A flow of advertisements emitted by the mock advertiser.
+ */
+open class MockExecutor(
+    peripheralSpec: PeripheralSpec<String>,
+    name: String?,
+    private val environment: MockAndroidEnvironment,
+    advertisements: Flow<MockScanResult<String>>,
+): MockExecutor(peripheralSpec, name, environment, advertisements), Peripheral.Executor {
+    override val type: PeripheralType = peripheralSpec.type
+
+    /** The current bond state. */
+    private val _bondState = MutableStateFlow(
+        if (peripheralSpec.isBonded) BondState.BONDED else BondState.NONE
+    )
+    override val bondState = _bondState.asStateFlow()
+
+    // Implementation
+
+    override suspend fun connect(autoConnect: Boolean, preferredPhy: List<Phy>) {
+        if (autoConnect) {
+            // There is no timeout for auto connect attempts.
+            super.connect(true, preferredPhy)
+        } else {
+            // Android has a timeout of 30 seconds for connection attempts.
+            // User may set a shorter timeout in ConnectionOptions.Direct.
+            withTimeout(30.seconds) {
+                super.connect(false, preferredPhy)
+            }
+        }
+    }
+
+    override suspend fun createBond(): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun removeBond(): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    override suspend fun refreshCache(): Boolean {
+        return gatt?.refreshCache() ?: false
+    }
+
+    override suspend fun requestConnectionPriority(priority: ConnectionPriority): Boolean {
+        gatt?.let { gatt ->
+            val result = gatt.requestConnectionParameters(priority.toConnectionParameters(environment))
+            if (!result) {
+                return false
+            }
+
+            // Prior to Android Oreo there is no callback for connection parameters change.
+            if (!environment.reportsConnectionParameters) {
+                gatt.onConnectionUpdated()
+            }
+            return true
+        }
+        return false
+    }
+
+    override suspend fun requestMtu(mtu: @Range(from = 23, to = 517) Int): Boolean {
+        return gatt?.requestMtu(mtu) ?: false
+    }
+
+    override suspend fun requestPhy(txPhy: Phy, rxPhy: Phy, phyOptions: PhyOption): Boolean {
+        gatt?.let { gatt ->
+            if (environment.androidSdkVersion >= AndroidEnvironment.SdkVersion.OREO) {
+                gatt.setPreferredPhy(txPhy, rxPhy, phyOptions)
+            } else {
+                gatt.setPreferredPhy(
+                    Phy.PHY_LE_1M,
+                    Phy.PHY_LE_1M,
+                    PhyOption.NO_PREFERRED
+                )
+            }
+            return true
+        }
+        return false
+    }
+
+    override suspend fun readPhy(): Boolean {
+        gatt?.let {  gatt ->
+            // It's not possible to set PHY to anything other than 1M on Android versions below Oreo,
+            // so we can just read it.
+            gatt.readPhy()
+            return true
+        }
+        return false
+    }
+
+    override fun beginReliableWrite(): Boolean {
+        if (isClosed || !peripheralSpec.isConnected) {
+            return false
+        }
+        isReliableWriteEnabled = true
+        return true
+    }
+
+    override suspend fun executeReliableWrite(): Boolean {
+        if (isClosed || !peripheralSpec.isConnected) {
+            return false
+        }
+        if (isReliableWriteEnabled) {
+            isReliableWriteEnabled = false
+            return gatt?.endReliableWrites(true) ?: false
+        }
+        return true
+    }
+
+    override suspend fun abortReliableWrite(): Boolean {
+        if (isClosed || !peripheralSpec.isConnected) {
+            return false
+        }
+        if (isReliableWriteEnabled) {
+            isReliableWriteEnabled = false
+            return gatt?.endReliableWrites(false) ?: false
+        }
+        return true
+    }
+
+    private fun ConnectionPriority.toConnectionParameters(environment: MockAndroidEnvironment): ConnectionParameters.Specified = when (this) {
+        ConnectionPriority.BALANCED -> ConnectionParameters.Specified(
+            connectionInterval = 24,
+            latency = 0,
+            supervisionTimeout = if (environment.androidSdkVersion >= AndroidEnvironment.SdkVersion.OREO) 500 else 2000
+        )
+        ConnectionPriority.HIGH -> if (environment.androidSdkVersion >= AndroidEnvironment.SdkVersion.MARSHMALLOW) {
+            ConnectionParameters.Specified(
+                connectionInterval = 9,
+                latency = 0,
+                supervisionTimeout = if (environment.androidSdkVersion >= AndroidEnvironment.SdkVersion.OREO) 500 else 2000
+            )
+        } else {
+            ConnectionParameters.Specified(
+                connectionInterval = 6,
+                latency = 0,
+                supervisionTimeout = 2000
+            )
+        }
+        ConnectionPriority.LOW_POWER -> ConnectionParameters.Specified(
+            connectionInterval = 80,
+            latency = 2,
+            supervisionTimeout = if (environment.androidSdkVersion >= AndroidEnvironment.SdkVersion.OREO) 500 else 2000
+        )
+        ConnectionPriority.DIGITAL_CAR_KEY -> ConnectionParameters.Specified(
+            connectionInterval = 24,
+            latency = 0,
+            supervisionTimeout = 500
+        )
+    }
+}

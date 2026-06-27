@@ -1,0 +1,3 @@
+In Android Studio, open settings (CTRL + ALT + S). Select plugins. Find Code Iris and install this. Restart Android Studio.
+Right click at the top of the project directory structure and select "Create Graph".
+The graph is now available on the right side of the IDE (Hidden. You need to expand it). Select Package View on the slider at the bottom.

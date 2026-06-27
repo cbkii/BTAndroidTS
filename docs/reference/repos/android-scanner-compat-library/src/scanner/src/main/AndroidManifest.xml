@@ -1,0 +1,58 @@
+<manifest package="no.nordicsemi.android.support.v18.scanner"
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:tools="http://schemas.android.com/tools">
+
+	<!--
+	 Bluetooth permissions require to check Bluetooth Adapter state
+	 and starting LE scan before Android S (API 31).
+	-->
+	<uses-permission
+		android:name="android.permission.BLUETOOTH"
+		android:maxSdkVersion="30"/>
+	<uses-permission
+		android:name="android.permission.BLUETOOTH_ADMIN"
+		android:maxSdkVersion="30"/>
+	<!--
+	 Bluetooth Scan permission is required from Android S onwards.
+
+	 Note: This permission may be used with "usesPermissionFlag". If you don't need location,
+	       declare this permission with this flag set to "neverForLocation".
+	-->
+	<uses-permission
+		android:name="android.permission.BLUETOOTH_SCAN" />
+
+	<!--
+	 Location permission has been removed from here, as it may not be required for
+	 Android 12 onwards. It is required on Android 6-11 when scanning for Bluetooth LE devices.
+
+	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+	-->
+
+	<application>
+		<!--
+		Service used to scan in background to emulate scanning with
+		PendingIntent on Android 4.3 - 7.x. Service will scan in background with given
+		settings and filters.
+		-->
+		<service
+			android:name=".ScannerService"
+			android:exported="false"/>
+
+		<!--
+		The receiver used to scan with PendingIntent on Android 8+.
+		It will translate results from android.bluetooth.le package to
+		no.nordicsemi.android.support.v18, apply filters or perform batching,
+		depending on the settings.
+		-->
+		<receiver
+			android:name=".PendingIntentReceiver"
+			android:exported="true"
+			tools:ignore="ExportedReceiver">
+			<intent-filter>
+				<action android:name="no.nordicsemi.android.support.v18.ACTION_FOUND"/>
+			</intent-filter>
+		</receiver>
+
+	</application>
+</manifest>

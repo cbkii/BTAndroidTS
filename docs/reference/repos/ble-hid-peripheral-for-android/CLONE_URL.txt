@@ -1,0 +1,1 @@
+https://github.com/kshoji/BLE-HID-Peripheral-for-Android.git

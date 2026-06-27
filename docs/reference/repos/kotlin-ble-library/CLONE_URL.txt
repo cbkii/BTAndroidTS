@@ -1,0 +1,1 @@
+https://github.com/nordicsemi/Kotlin-BLE-Library.git

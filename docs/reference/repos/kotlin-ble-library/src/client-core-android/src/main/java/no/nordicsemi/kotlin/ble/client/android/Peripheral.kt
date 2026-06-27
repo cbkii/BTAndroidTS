@@ -1,0 +1,917 @@
+/*
+ * Copyright (c) 2024, Nordic Semiconductor
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are
+ * permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this list of
+ * conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list
+ * of conditions and the following disclaimer in the documentation and/or other materials
+ * provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors may be
+ * used to endorse or promote products derived from this software without specific prior
+ * written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+ * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+@file:Suppress("unused", "MemberVisibilityCanBePrivate")
+
+package no.nordicsemi.kotlin.ble.client.android
+
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeout
+import no.nordicsemi.kotlin.ble.client.ConnectionParametersChanged
+import no.nordicsemi.kotlin.ble.client.ConnectionStateChanged
+import no.nordicsemi.kotlin.ble.client.GattEvent
+import no.nordicsemi.kotlin.ble.client.MtuChanged
+import no.nordicsemi.kotlin.ble.client.Peripheral
+import no.nordicsemi.kotlin.ble.client.PhyChanged
+import no.nordicsemi.kotlin.ble.client.ReliableWriteCompleted
+import no.nordicsemi.kotlin.ble.client.RemoteServices
+import no.nordicsemi.kotlin.ble.client.ServicesChanged
+import no.nordicsemi.kotlin.ble.client.android.Peripheral.Executor
+import no.nordicsemi.kotlin.ble.client.android.exception.BondingFailedException
+import no.nordicsemi.kotlin.ble.client.android.exception.PeripheralClosedException
+import no.nordicsemi.kotlin.ble.client.exception.ConnectionFailedException
+import no.nordicsemi.kotlin.ble.client.exception.OperationFailedException
+import no.nordicsemi.kotlin.ble.client.exception.PeripheralNotConnectedException
+import no.nordicsemi.kotlin.ble.client.exception.ValueDoesNotMatchException
+import no.nordicsemi.kotlin.ble.client.internal.OperationMutex
+import no.nordicsemi.kotlin.ble.core.ATT_MTU_DEFAULT
+import no.nordicsemi.kotlin.ble.core.ATT_MTU_MAX
+import no.nordicsemi.kotlin.ble.core.BondState
+import no.nordicsemi.kotlin.ble.core.ConnectionParameters
+import no.nordicsemi.kotlin.ble.core.ConnectionState
+import no.nordicsemi.kotlin.ble.core.ConnectionState.Disconnected.Reason
+import no.nordicsemi.kotlin.ble.core.OperationStatus
+import no.nordicsemi.kotlin.ble.core.PeripheralType
+import no.nordicsemi.kotlin.ble.core.Phy
+import no.nordicsemi.kotlin.ble.core.PhyInUse
+import no.nordicsemi.kotlin.ble.core.PhyOption
+import no.nordicsemi.kotlin.ble.core.WriteType
+import no.nordicsemi.kotlin.ble.core.log.Layer
+import org.jetbrains.annotations.Range
+import kotlin.math.min
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+
+/**
+ * Android-specific implementation of a peripheral.
+ *
+ * This class extends [Peripheral] and adds Android-specific methods.
+ *
+ * @param scope scope The coroutine scope.
+ * @param impl The executor that provides methods to interact with the peripheral.
+ */
+open class Peripheral(
+    scope: CoroutineScope,
+    impl: Executor,
+): Peripheral<String, Executor>(scope, impl) {
+
+    /**
+     * An interface that provides methods to interact with the peripheral.
+     *
+     * The implementation should initiate requests and report events using [events] flow.
+     */
+    interface Executor: Peripheral.Executor<String> {
+        /** MAC address of the device. */
+        val address: String
+            get() = identifier
+
+        /** The Bluetooth device type of the remote device. */
+        val type: PeripheralType
+
+        /**
+         * Bonding state as a state flow.
+         *
+         * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+         */
+        val bondState: StateFlow<BondState>
+
+        /**
+         * Requests the connection priority to be changed.
+         *
+         * The result should be reported by emitting [ConnectionParametersChanged] event
+         * to [events] flow.
+         *
+         * @param priority The new connection priority.
+         * @return True if connection priority was requested successfully; false otherwise.
+         * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+         */
+        @IgnorableReturnValue
+        suspend fun requestConnectionPriority(priority: ConnectionPriority): Boolean
+
+        /**
+         * Requests the MTU (Maximum Transmission Unit) to be set to the given value.
+         *
+         * The result should be reported by emitting [MtuChanged] event to [events] flow.
+         *
+         * @param mtu Requested MTU value.
+         * @return True if MTU was requested successfully; false otherwise.
+         * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+         */
+        @IgnorableReturnValue
+        suspend fun requestMtu(mtu: @Range(from = 23, to = 517) Int): Boolean
+
+        /**
+         * Requests the PHY to be changed.
+         *
+         * The result should be reported by emitting [ConnectionParametersChanged] event
+         * to [events] flow.
+         *
+         * @param txPhy The preferred transmitter PHY.
+         * @param rxPhy The preferred receiver PHY.
+         * @param phyOptions The preferred coding to use when transmitting on the LE Coded PHY.
+         * @return True if PHY was requested successfully; false otherwise.
+         * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+         */
+        @IgnorableReturnValue
+        suspend fun requestPhy(txPhy: Phy, rxPhy: Phy, phyOptions: PhyOption): Boolean
+
+        /**
+         * This method should initiate reading the current PHY parameters.
+         *
+         * The result should be reported by emitting [PhyChanged] event to [events] flow.
+         *
+         * @return True if reading PHY was requested successfully; false otherwise.
+         * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+         */
+        @IgnorableReturnValue
+        suspend fun readPhy(): Boolean
+
+        /**
+         * This method should initiate a reliable write transaction.
+         *
+         * No event is expected to be emitted to [events] flow.
+         *
+         * @return True if the operation was successfully; false otherwise.
+         */
+        @IgnorableReturnValue
+        fun beginReliableWrite(): Boolean
+
+        /**
+         * This method should execute all queued reliable write operations.
+         *
+         * The result should be reported by emitting [ReliableWriteCompleted] event to [events] flow.
+         *
+         * @return True if the operation was successfully; false otherwise.
+         */
+        @IgnorableReturnValue
+        suspend fun executeReliableWrite(): Boolean
+
+        /**
+         * This method should abort a reliable write transaction.
+         *
+         * The result should be reported by emitting [ReliableWriteCompleted] event to [events] flow.
+         *
+         * @return True if the operation was successfully; false otherwise.
+         */
+        @IgnorableReturnValue
+        suspend fun abortReliableWrite(): Boolean
+
+        /**
+         * This method should initiate bonding with the peripheral.
+         *
+         * This method is guaranteed to be called only when the bond information does not exist.
+         *
+         * The result should be reported by emitting state [BondState.BONDED] (in case of a success)
+         * or [BondState.NONE] (in case of a failure) to [bondState] flow.
+         *
+         * @return True if bond was requested successfully; false otherwise.
+         * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+         */
+        @IgnorableReturnValue
+        suspend fun createBond(): Boolean
+
+        /**
+         * This method should initiate removing bond information associated with the peripheral.
+         *
+         * It is expected, that removing bond information will terminate existing connection.
+         *
+         * This method is guaranteed to be called only when the bond information exists.
+         *
+         * The result should be reported by emitting state [BondState.NONE] to [bondState] flow.
+         *
+         * @return True if removing bond information has been initiated successfully; false otherwise.
+         * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+         */
+        @IgnorableReturnValue
+        suspend fun removeBond(): Boolean
+
+        /**
+         * Refreshes services cache.
+         *
+         * @return True if cache was cleared successfully; false otherwise.
+         */
+        @IgnorableReturnValue
+        suspend fun refreshCache(): Boolean
+    }
+
+    override val identifier: String = impl.address
+
+    /** MAC address of the peripheral as String, alias for [Peripheral.identifier]. */
+    val address: String = impl.address
+
+    /** The Bluetooth device type of the remote device. */
+    val type: PeripheralType = impl.type
+
+    /** Connection parameters of the peripheral as state flow. */
+    private var _connectionParameters = MutableStateFlow<ConnectionParameters?>(null)
+    /** The current connection parameters as [StateFlow]. */
+    val connectionParameters = _connectionParameters.asStateFlow()
+
+    /** The current PHY as state flow. */
+    private val _phy = MutableStateFlow<PhyInUse?>(null)
+    /** The current PHY in use for transmitting and receiving data. */
+    val phy = _phy.asStateFlow()
+
+    /** Current MTU (Maximum Transmission Unit) value. */
+    private var mtu: Int = ATT_MTU_DEFAULT
+
+    /**
+     * MTU can be requested only once.
+     *
+     * Since Android 14 the system will always request value 517 ignoring the requested value.
+     * @see requestHighestValueLength
+     */
+    private var mtuRequested: Boolean = false
+
+    // Common implementation
+
+    /**
+     * Initiates a connection to the peripheral.
+     *
+     * This is a no-op if the peripheral is already connected.
+     *
+     * @param options The connection options.
+     * @throws ConnectionFailedException If connection failed. See [ConnectionFailedException.reason]
+     * for a reason.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     * @throws CancellationException If the coroutine was canceled.
+     * @throws TimeoutCancellationException If the connection attempt timed out.
+     */
+    internal suspend fun connect(options: CentralManager.ConnectionOptions) {
+        // Check if the peripheral isn't already connected or has a pending connection.
+        if (state.value is ConnectionState.Connected) {
+            return
+        }
+
+        // Start connection attempt, based on the connection options.
+        logger?.trace(Layer.GAP) { "Connecting to $this using $options" }
+        _state.update { ConnectionState.Connecting }
+        when (options) {
+            // In case of auto connect, the connection attempt does not time out.
+            // Cancel the coroutine to abort.
+            is CentralManager.ConnectionOptions.AutoConnect -> {
+                try {
+                    val state = await(
+                        action = { impl.connect(true, emptyList()) },
+                        condition = { it.isConnected || it.isDisconnected },
+                    )
+                    when (state) {
+                        is ConnectionState.Connected -> {
+                            logger?.info(Layer.GAP) { "Connected to $this" }
+                            _state.update { ConnectionState.Connected }
+                            _connectionParameters.update { ConnectionParameters.Unknown }
+                            _phy.update { PhyInUse.PHY_LE_1M }
+                            // Since we're connected, let's start collecting GATT events, including
+                            // connection state changes. The device may disconnect and reconnect at
+                            // any time. To stop collecting the events one needs to call disconnect().
+                            startCollectingGattEvents(closeWhenDisconnected = false)
+                            if (options.automaticallyRequestHighestValueLength) {
+                                mtuRequested = true
+                            }
+                            initiateConnection()
+                        }
+                        is ConnectionState.Disconnected -> {
+                            // RPA (Resolvable Private Address) can rotate, causing address to "expire" in the
+                            // background connection list. RPA is allowed for direct connect, as such request
+                            // times out after 30 seconds.
+                            //
+                            // Android returns status 133 or 135 when the address is not supported
+                            // in background connection. It is possible to connect to such device using
+                            // direct connection.
+                            //
+                            // See: https://cs.android.com/android/platform/superproject/main/+/main:packages/modules/Bluetooth/system/stack/gatt/gatt_api.cc;l=1450
+                            val reason = state.reason!!
+                            if (reason is Reason.Unknown && (reason.status == 133 || reason.status == 135)) {
+                                logger?.warn(Layer.GAP) { "Connection attempt failed (reason: ${Reason.UnsupportedAddress})" }
+                                _state.update { ConnectionState.Disconnected(Reason.UnsupportedAddress) }
+                                throw ConnectionFailedException(Reason.UnsupportedAddress)
+                            }
+                            logger?.warn(Layer.GAP) { "Connection attempt failed (reason: $reason)" }
+                            _state.update { state }
+                            throw ConnectionFailedException(reason)
+                        }
+                        else -> {}
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    // Although the connection using AutoConnect does not time out on its own,
+                    // it's still possible to wrap it in withTimeout. Report this as a timeout, not cancellation.
+                    logger?.warn(Layer.GAP, e)
+                    _state.update { ConnectionState.Disconnected(Reason.Timeout(e.timeout ?: Duration.ZERO)) }
+                    close()
+                    throw e
+                } catch (e: CancellationException) {
+                    logger?.warn(Layer.GAP) { "Connection attempt cancelled" }
+                    _state.update { ConnectionState.Disconnected(Reason.Cancelled) }
+                    close()
+                    throw e
+                }
+            }
+
+            // Direct connection gives more options to configure the connection.
+            is CentralManager.ConnectionOptions.Direct -> {
+                val now = System.currentTimeMillis()
+                try {
+                    val state = await(
+                        action = { impl.connect(false, options.preferredPhy) },
+                        condition = { it.isConnected || it.isDisconnected },
+                        timeout = options.timeout,
+                    )
+                    when (state) {
+                        is ConnectionState.Connected -> {
+                            logger?.info(Layer.GAP) { "Connected to $this" }
+                            _state.update { ConnectionState.Connected }
+                            _connectionParameters.update { ConnectionParameters.Unknown }
+                            // TODO should preferred PHY be used from options?
+                            _phy.update { PhyInUse.PHY_LE_1M }
+                            // Since we're connected, let's start collecting GATT events.
+                            // In case of a direct connection, a disconnection will cancel
+                            // event collection and close the peripheral.
+                            startCollectingGattEvents()
+                            if (options.automaticallyRequestHighestValueLength) {
+                                mtuRequested = true
+                            }
+                            initiateConnection()
+                        }
+                        is ConnectionState.Disconnected -> {
+                            val reason = state.reason!!
+                            // A connection may time out for 3 reasons: Direct(timeout), withTimeout,
+                            // or internal timeout (error 133/147 after ~30s). The library should
+                            // report all 3 cases the same way: as a TimeoutCancellationException.
+                            // Error 147 was added in API 35: https://developer.android.com/reference/android/bluetooth/BluetoothGatt#GATT_CONNECTION_TIMEOUT
+                            // Before, a connection timeout was reported as error 133.
+                            if (reason is Reason.Unknown && (reason.status == 133 || reason.status == 147)) {
+                                val elapsed = System.currentTimeMillis() - now
+                                // Default timeout for direct connection is 30 seconds. Let's use 25.
+                                if (elapsed >= 25000) {
+                                    // The connection timeout should behave just as a timeout defined
+                                    // by the user with withTimeout or Direct(timeout=...).
+                                    withTimeout(Duration.ZERO) {}
+                                    // ^ throws TimeoutCancellationException("Timed out immediately")!!!
+                                }
+                            }
+                            check(options.retry > 0) {
+                                logger?.warn(Layer.GAP) { "Connection attempt failed (reason: $reason)" }
+                                _state.update { state }
+                                throw ConnectionFailedException(reason)
+                            }
+                            logger?.warn(Layer.GAP) { "Connection attempt failed (reason: ${state.reason}), retrying in ${options.retryDelay}..." }
+                            delay(options.retryDelay)
+                            connect(options.copy(retry = options.retry - 1))
+                        }
+                        else -> {}
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    val elapsed = System.currentTimeMillis() - now
+                    logger?.warn(Layer.GAP) { "Connection attempt timed out after ${e.timeout ?: elapsed.milliseconds}" }
+                    _state.update { ConnectionState.Disconnected(Reason.Timeout(e.timeout ?: elapsed.milliseconds)) }
+                    close()
+                    throw e
+                } catch (e: CancellationException) {
+                    logger?.warn(Layer.GAP) { "Connection attempt cancelled" }
+                    _state.update { ConnectionState.Disconnected(Reason.Cancelled) }
+                    close()
+                    throw e
+                }
+            }
+        }
+    }
+
+    override suspend fun handle(event: GattEvent) = when (event) {
+        is ReliableWriteCompleted -> impl.isReliableWriteEnabled = false
+        is MtuChanged -> mtu = event.mtu
+        is PhyChanged -> _phy.update { event.phy }
+        is ConnectionParametersChanged -> _connectionParameters.update { event.newParameters }
+        is ConnectionStateChanged -> {
+            if (event.isPhyRequestError) {
+                super.handle(ConnectionStateChanged(ConnectionState.Disconnected(reason = Reason.UnsupportedConfiguration)))
+            } else {
+                super.handle(event)
+            }
+        }
+        else -> super.handle(event)
+    }
+
+    override suspend fun initiateConnection() {
+        // Request high MTU before service discovery.
+        if (mtuRequested) {
+            try {
+                requestHighestValueLength()
+            } catch (_: PeripheralNotConnectedException) {
+                // Skip service discovery if the peripheral got disconnected.
+                return
+            } catch (e: OperationFailedException) {
+                logger?.warn(Layer.GATT, e) { "Requesting MTU failed" }
+            }
+        }
+        // Super implementation will start service discovery it the services are observed.
+        super.initiateConnection()
+    }
+
+    override fun handleDisconnection() {
+        super.handleDisconnection()
+        mtu = ATT_MTU_DEFAULT
+        _phy.update { null }
+        _connectionParameters.update { null }
+        // Note!
+        // Do not reset the mtuRequested flag here. MTU will be requested again once
+        // the device gets connected, or will be cleared when the peripheral is closed, below.
+    }
+
+    override fun handleClose() {
+        mtuRequested = false
+    }
+
+    /**
+     * Read the current transmitter PHY and receiver PHY of the connection.
+     *
+     * PHY LE 2M or PHY Coded is supported since Android 8.0 (API level 26) or later.
+     *
+     * @return The PHY in use for transmitting and receiving data.
+     * @throws PeripheralNotConnectedException If the device is not connected.
+     * @throws OperationFailedException If PHY could not be read.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     */
+    suspend fun readPhy(): PhyInUse {
+        check(isConnected) {
+            throw PeripheralNotConnectedException()
+        }
+        return OperationMutex.withLock {
+            logger?.trace(Layer.PHY) { "Reading PHY" }
+            impl.events
+                .onSubscription {
+                    if (!impl.readPhy()) {
+                        throw OperationFailedException(OperationStatus.RequestFailed)
+                    }
+                }
+                .takeWhile { !it.isDisconnectionEvent }
+                .filterIsInstance(PhyChanged::class)
+                // TODO add .timeout(...)?
+                .firstOrNull()?.phy
+                ?.also { logger?.info(Layer.PHY) { "PHY read: $it" } }
+                ?: throw PeripheralNotConnectedException()
+        }
+    }
+
+    /**
+     * Set the preferred connection PHY.
+     *
+     * PHY LE 2M or PHY Coded is supported since Android 8.0 (API level 26) or later.
+     * Other devices will continue to use the only PHY they support, that is [Phy.PHY_LE_1M].
+     *
+     * Please note that this is just a recommendation, whether the PHY change will happen depends
+     * on other applications preferences, local and remote controller capabilities.
+     * Controller can override these settings.
+     *
+     * @param txPhy The preferred transmitter PHY.
+     * @param rxPhy The preferred receiver PHY. By default, it is the same as [txPhy].
+     * @param phyOptions The preferred coding to use when transmitting on the LE Coded PHY.
+     * @return The PHYs in use after the change.
+     * @throws PeripheralNotConnectedException If the device is not connected.
+     * @throws OperationFailedException If PHY change could not be requested.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     */
+    suspend fun setPreferredPhy(
+        txPhy: Phy,
+        rxPhy: Phy = txPhy,
+        phyOptions: PhyOption = PhyOption.NO_PREFERRED,
+    ): PhyInUse {
+        check(isConnected) {
+            throw PeripheralNotConnectedException()
+        }
+        return OperationMutex.withLock {
+            logger?.trace(Layer.PHY) { "Setting preferred PHY: tx=$txPhy, rx=$rxPhy, options=$phyOptions" }
+            impl.events
+                .onSubscription {
+                    if (!impl.requestPhy(txPhy, rxPhy, phyOptions)) {
+                        throw OperationFailedException(OperationStatus.RequestFailed)
+                    }
+                }
+                .takeWhile { !it.isDisconnectionEvent }
+                .filterIsInstance(PhyChanged::class)
+                // TODO add .timeout(...)?
+                .firstOrNull()?.phy
+                ?.also { logger?.info(Layer.PHY) { "PHY changed to: $it" } }
+                ?: throw PeripheralNotConnectedException()
+        }
+    }
+
+    /**
+     * The maximum amount of data, in bytes, that can be sent to a characteristic in a single write
+     * operation.
+     *
+     * Maximum value length depends on [WriteType] and is calculated as:
+     * * *512 bytes* for [WriteType.WITH_RESPONSE],
+     * * *ATT MTU - 3 bytes* for [WriteType.WITHOUT_RESPONSE],
+     * * *ATT MTU - 15 bytes* for [WriteType.SIGNED] (additional 12 bytes for the signature).
+     *
+     * Higher value of ATT MTU for [WriteType.WITHOUT_RESPONSE] can be requested
+     * using [requestHighestValueLength].
+     *
+     * @throws PeripheralNotConnectedException If the device is not connected.
+     */
+    override fun maximumWriteValueLength(type: WriteType): Int {
+        check(isConnected) {
+            throw PeripheralNotConnectedException()
+        }
+        return when (type) {
+            WriteType.WITH_RESPONSE -> 512
+            WriteType.WITHOUT_RESPONSE -> min(mtu - 3, 512)
+            WriteType.SIGNED -> mtu - 15
+        }
+    }
+
+    /**
+     * Requests the highest possible MTU ([517][ATT_MTU_MAX]).
+     *
+     * The highest MTU will be automatically requested when the peripheral is reconnected
+     * when connected using [automaticallyRequestHighestValueLength][CentralManager.ConnectionOptions.automaticallyRequestHighestValueLength]
+     * option.
+     *
+     * #### Note
+     *
+     * Although it used to be possible to request any value of MTU from 23 to 517, since Android 14
+     * the system will always request value 517 ignoring the requested value. Hence, this method
+     * does not allow to set custom MTU value.
+     *
+     * #### Important
+     *
+     * It is known that some Android devices (i.e. Samsung Galaxy Tab A8) fail to negotiate
+     * L2CAP MTU (packet size on the Link Layer) using Data Length Extension (DLE). They mistakenly
+     * claim supporting only 27 bytes of TX, but then try to send up to 251 bytes, causing the
+     * connection to terminate. For such devices it is recommended not to request higher MTU
+     * or never sending more than 20 bytes in a single write operation.
+     *
+     * @throws PeripheralNotConnectedException If the device is not connected.
+     * @throws OperationFailedException If MTU could not be requested.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     * @see maximumWriteValueLength
+     */
+    suspend fun requestHighestValueLength() {
+        check(isConnected) {
+            throw PeripheralNotConnectedException()
+        }
+        check(mtu == ATT_MTU_DEFAULT) {
+            logger?.warn(Layer.GATT) { "MTU has been already requested" }
+            return
+        }
+        mtuRequested = true
+        val _ = OperationMutex.withLock {
+            logger?.trace(Layer.GATT) { "Requesting MTU: $ATT_MTU_MAX" }
+            impl.events
+                .onSubscription {
+                    if (!impl.requestMtu(ATT_MTU_MAX)) {
+                        throw OperationFailedException(OperationStatus.RequestFailed)
+                    }
+                }
+                .takeWhile { !it.isDisconnectionEvent }
+                .filterIsInstance(MtuChanged::class)
+                // TODO add .timeout(...)?
+                .firstOrNull()?.mtu
+                ?.also { logger?.info(Layer.GATT) { "MTU set to $it" } }
+                ?: throw PeripheralNotConnectedException()
+        }
+    }
+
+    /**
+     * Requests new connection parameters.
+     *
+     * Android API does not allow to set custom connection parameters. Instead, predefined
+     * connection priorities can be requested. Corresponding values for each priority are
+     * may differ between Android versions and devices.
+     *
+     * On Android versions prior to Android 8 (Oreo) the updated connection parameters are not
+     * returned to the app, therefore the returned value will be [ConnectionParameters.Unknown].
+     *
+     * @param priority The new connection priority.
+     * @return The new connection parameters.
+     * @throws PeripheralNotConnectedException If the device is not connected.
+     * @throws OperationFailedException If connection priority could not be requested.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     */
+    suspend fun requestConnectionPriority(priority: ConnectionPriority): ConnectionParameters {
+        check(isConnected) {
+            throw PeripheralNotConnectedException()
+        }
+        return OperationMutex.withLock {
+            logger?.trace(Layer.LINK) { "Requesting connection priority: $priority" }
+            impl.events
+                .onSubscription {
+                    if (!impl.requestConnectionPriority(priority)) {
+                        throw OperationFailedException(OperationStatus.RequestFailed)
+                    }
+                }
+                .takeWhile { !it.isDisconnectionEvent }
+                .filterIsInstance(ConnectionParametersChanged::class)
+                // TODO add .timeout(...)?
+                .firstOrNull()?.newParameters
+                ?.also { logger?.info(Layer.LINK) { "Connection parameters updated: $it" } }
+                ?: throw PeripheralNotConnectedException()
+        }
+    }
+
+    /**
+     * Initiates a reliable write transaction.
+     *
+     * The purpose of *Reliable Write* is to queue up writes of values of one or multiple
+     * attributes (characteristics or descriptors) in a first-in first-out queue and then execute
+     * the write on all of them in a single atomic operation.
+     *
+     * After calling this method, all write with response operations performed on characteristics
+     * and descriptors will use *Prepare Write Request* PDUs instead of *Write Request*.
+     *
+     * Call [executeReliableWrite] or [abortReliableWrite] to commit or cancel the transaction.
+     *
+     * TODO Is the exception truly thrown?
+     * If any of the write operations throws [ValueDoesNotMatchException], the whole transaction
+     * will be aborted.
+     *
+     * @throws PeripheralNotConnectedException If the device is not connected.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     * @see executeReliableWrite
+     * @see abortReliableWrite
+     */
+    fun beginReliableWrite() {
+        check(isConnected) {
+            throw PeripheralNotConnectedException()
+        }
+        logger?.trace(Layer.GATT) { "Beginning reliable write" }
+        impl.beginReliableWrite()
+    }
+
+    /**
+     * Executes all write with response operations queued since [beginReliableWrite] was called.
+     *
+     * The queued writes will be committed in a single atomic operation.
+     *
+     * @throws PeripheralNotConnectedException If the device is not connected.
+     * @throws OperationFailedException If reliable write could not be executed.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     * @see beginReliableWrite
+     * @see executeReliableWrite
+     */
+    suspend fun executeReliableWrite() {
+        check(isConnected) {
+            throw PeripheralNotConnectedException()
+        }
+        check(impl.isReliableWriteEnabled) {
+            logger?.warn(Layer.GATT) { "Reliable write not in progress, nothing to execute" }
+            return
+        }
+        OperationMutex.withLock {
+            logger?.trace(Layer.GATT) { "Executing reliable write" }
+            impl.events
+                .onSubscription {
+                    if (!impl.executeReliableWrite()) {
+                        throw OperationFailedException(OperationStatus.RequestFailed)
+                    }
+                }
+                .takeWhile { !it.isDisconnectionEvent }
+                .filterIsInstance(ReliableWriteCompleted::class)
+                // TODO add .timeout(...)?
+                .firstOrNull()?.let {
+                    when (it.status) {
+                        OperationStatus.Success -> logger?.info(Layer.GATT) { "Reliable write executed successfully" }
+                        else -> {
+                            logger?.warn(Layer.GATT) { "Reliable write failed: ${it.status}" }
+                            throw OperationFailedException(it.status)
+                        }
+                    }
+                } ?: throw PeripheralNotConnectedException()
+        }
+    }
+
+    /**
+     * Aborts the reliable write transaction started using [beginReliableWrite].
+     *
+     * All queued write operations will be discarded on the peripheral.
+     *
+     * @throws PeripheralNotConnectedException If the device is not connected.
+     * @throws OperationFailedException If reliable write could not be aborted.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     * @see beginReliableWrite
+     * @see executeReliableWrite
+     */
+    suspend fun abortReliableWrite() {
+        check(isConnected) {
+            throw PeripheralNotConnectedException()
+        }
+        check(impl.isReliableWriteEnabled) {
+            logger?.warn(Layer.GATT) { "Reliable write not in progress, nothing to abort" }
+            return
+        }
+        OperationMutex.withLock {
+            logger?.trace(Layer.GATT) { "Aborting reliable write" }
+            impl.events
+                .onSubscription {
+                    if (!impl.abortReliableWrite()) {
+                        throw OperationFailedException(OperationStatus.RequestFailed)
+                    }
+                }
+                .takeWhile { !it.isDisconnectionEvent }
+                .filterIsInstance(ReliableWriteCompleted::class)
+                // TODO add .timeout(...)?
+                .firstOrNull()?.let {
+                    when (it.status) {
+                        OperationStatus.Success -> logger?.info(Layer.GATT) { "Reliable write aborted successfully" }
+                        else -> {
+                            logger?.warn(Layer.GATT) { "Aborting reliable write failed: ${it.status}" }
+                                throw OperationFailedException(it.status)
+                        }
+                    }
+                } ?: throw PeripheralNotConnectedException()
+        }
+    }
+
+    /**
+     * Refreshes the cached GATT database associated with the peripheral and starts new service
+     * discovery automatically.
+     *
+     * All observers subscribed to invalidated attributes will be canceled. The flows returned
+     * by [services] will emit an empty list of services following by updated list of services
+     * when the new service discovery is complete.
+     *
+     * It is safe to call this method when the peripheral is connected, connecting, or disconnecting.
+     * It may be called when the device is disconnected but only when the connection was made using
+     * [AutoConnect][CentralManager.ConnectionOptions.AutoConnect] option in which case the system
+     * is trying to reconnect.
+     *
+     * A connection made using [Direct][CentralManager.ConnectionOptions.Direct] option closes
+     * automatically immediately after disconnection.
+     *
+     * When invoked on a closed connection the method throws [PeripheralClosedException].
+     *
+     * @throws PeripheralClosedException If the peripheral is closed.
+     * @throws OperationFailedException If cache could not be refreshed.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     */
+    suspend fun refreshCache() {
+        check(!impl.isClosed) {
+            throw PeripheralClosedException()
+        }
+        val _ = OperationMutex.withLock {
+            logger?.trace(Layer.GATT) { "Refreshing cache" }
+            impl.events
+                .onSubscription {
+                    if (!impl.refreshCache()) {
+                        throw OperationFailedException(OperationStatus.RequestFailed)
+                    }
+                }
+                // TODO add .timeout(...)?
+                .first { it == ServicesChanged }
+                .also { logger?.info(Layer.GATT) { "Cache refreshed" } }
+        }
+    }
+
+    /**
+     * Initiates bonding with the peripheral.
+     *
+     * @throws BondingFailedException If bonding failed.
+     * @throws OperationFailedException If bonding could not be started.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     */
+    suspend fun createBond() {
+        if (hasBondInformation) {
+            return
+        }
+        val _ = OperationMutex.withLock {
+            logger?.trace(Layer.SMP) { "Creating bond" }
+            impl.bondState
+                .onSubscription {
+                    if (!impl.createBond()) {
+                        throw OperationFailedException(OperationStatus.RequestFailed)
+                    }
+                }
+                // Skip the initial state. It should transition to BONDING quickly.
+                .dropWhile { it == BondState.NONE }
+                // Now, await for the next state after BONDING.
+                .first { it != BondState.BONDING }
+                // And process it.
+                .also {
+                    when (it) {
+                        BondState.BONDED -> logger?.info(Layer.SMP) { "Bond created" }
+                        BondState.NONE -> {
+                            logger?.warn(Layer.SMP) { "Bonding failed" }
+                            throw BondingFailedException()
+                        }
+                        else -> { /* Not possible */ }
+                    }
+                }
+        }
+    }
+
+    /**
+     * Removes the bond information associated with the peripheral.
+     *
+     * This method will disconnect the peripheral if it was connected.
+     *
+     * @throws OperationFailedException If bond information could not be removed.
+     * @throws SecurityException If BLUETOOTH_CONNECT permission is denied.
+     */
+    suspend fun removeBond() {
+        if (!hasBondInformation) {
+            return
+        }
+        val _ = OperationMutex.withLock {
+            logger?.trace(Layer.SMP) { "Removing bond information" }
+            impl.bondState
+                .onSubscription {
+                    if (!impl.removeBond()) {
+                        throw OperationFailedException(OperationStatus.RequestFailed)
+                    }
+                }
+                .first { it == BondState.NONE }
+                .also { logger?.info(Layer.SMP) { "Bond information removed" } }
+        }
+    }
+
+    /**
+     * Returns whether the system has bond information associated with this peripheral.
+     *
+     * #### Security Note
+     * Having a bond information does not guarantee that the connection to the device is secure.
+     * Android should terminate the connection to a device for which it has a bond information
+     * if encryption cannot be resumed, but some devices don't do that. Instead, the bond state
+     * is set to [BondState.BONDED] and the connection is kept open without any security.
+     */
+    val hasBondInformation: Boolean
+        get() = bondState.value == BondState.BONDED
+
+    /**
+     * Returns the current bond state as [StateFlow].
+     *
+     * #### Security Note
+     * State [BondState.BONDED] does not guarantee that the connection to the device is secure.
+     * Some Android devices allow connecting to bonded devices without restoring encryption,
+     * or they remove the bond information when it fails.
+     */
+    val bondState: StateFlow<BondState>
+        get() = impl.bondState
+
+    /**
+     * A helper property to extract the timeout from the [TimeoutCancellationException] message.
+     */
+    private val TimeoutCancellationException.timeout: Duration?
+        get() = message?.let { message ->
+            val regex = Regex("""\d+""")
+            val match = regex.find(message)
+            return match?.value?.toLongOrNull()?.milliseconds
+        }
+
+    /**
+     * Checks if the disconnection event is caused by a PHY request error.
+     *
+     * Samsung S8 with Android 9 fails to reconnect to a peripheral that requested PHY LE 2M
+     * immediately after establishing the connection. It replies with PhyResponse with Instant
+     * from the past, causing the peripheral to drop the connection.
+     */
+    private val ConnectionStateChanged.isPhyRequestError: Boolean
+        get() = (newState as? ConnectionState.Disconnected)?.let {
+            // Returned error is 0x08 (TIMEOUT).
+            it.reason == Reason.LinkLoss &&
+            // This happens before the services are discovered,
+            _services.value !is RemoteServices.Discovered &&
+            // ...but after the app is notified about change to PHY LE 2M.
+            phy.value?.txPhy == Phy.PHY_LE_2M
+        } ?: false
+}
