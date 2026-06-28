@@ -38,15 +38,16 @@ class PhoneKeyboardScanControllerImpl(
     private val cacheLock = Any()
     private val _currentCandidates = LinkedHashMap<String, PhoneKeyboardCandidate>()
     private val clearTrigger = MutableStateFlow(0L)
+    private var cacheGeneration = 0L
 
     override val candidates: StateFlow<List<PhoneKeyboardCandidate>> = combine(
         inventoryRepository.devices,
         hidHostController.profileStates,
         tickerFlow,
         clearTrigger
-    ) { unifiedDevices, hidStates, currentTime, _ ->
-        val working = synchronized(cacheLock) {
-            _currentCandidates.toMutableMap()
+    ) { unifiedDevices, hidStates, currentTime, currentClearTrigger ->
+        val (working, initialGeneration) = synchronized(cacheLock) {
+            _currentCandidates.toMutableMap() to cacheGeneration
         }
 
         for (device in unifiedDevices) {
@@ -116,8 +117,14 @@ class PhoneKeyboardScanControllerImpl(
         }
 
         synchronized(cacheLock) {
-            _currentCandidates.clear()
-            _currentCandidates.putAll(working)
+            if (initialGeneration == cacheGeneration) {
+                _currentCandidates.clear()
+                _currentCandidates.putAll(working)
+            } else {
+                // Generation changed during the suspend/combine process (e.g. clearCandidates was called)
+                // Discard stale working calculation and return the current fresh state.
+                return@combine _currentCandidates.values.toList()
+            }
         }
 
         working.values
@@ -147,6 +154,7 @@ class PhoneKeyboardScanControllerImpl(
 
     override fun clearCandidates() {
         synchronized(cacheLock) {
+            cacheGeneration++
             _currentCandidates.clear()
         }
         clearTrigger.value = System.currentTimeMillis()
