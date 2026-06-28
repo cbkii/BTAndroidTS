@@ -15,7 +15,7 @@
 
 ## Phase 5 - Pair / connect / verify flow
 * Connect via `HidHostController` and `BluetoothBondController`.
-* Connect via `KeyboardInputVerifier` and `AndroidInputDeviceRepository`.
+* Connect via `InputDeviceRepository`. UI flow navigates to `KeyboardTestDestination` when checking verified inputs.
 
 ## Phase 6 - Failure taxonomy and guidance
 * Map `PhoneKeyboardFailureReason` to user-facing strings and checklist instructions.

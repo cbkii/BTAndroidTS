@@ -20,6 +20,8 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
+import kotlinx.coroutines.flow.collectLatest
+import com.cbkii.btandroidts.presentation.util.LocalSnackBarProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>(route = Routes.PHONE_KEYBOARD_ROUTE, style = RouteAnimation::class)
@@ -30,11 +32,24 @@ fun AnimatedVisibilityScope.PhoneKeyboardScreen(
     val viewModel = koinViewModel<PhoneKeyboardViewModel>()
     val candidates by viewModel.candidates.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
+    val snackBarHostState = LocalSnackBarProvider.current
+
+    LaunchedEffect(viewModel) {
+        viewModel.uiEvents.collectLatest { event ->
+            when(event) {
+                is PhoneKeyboardUiEvent.NavigateToKeyboardTest -> navigator.navigate(com.ramcosta.composedestinations.generated.destinations.KeyboardTestDestination)
+                is PhoneKeyboardUiEvent.ShowError -> {
+                    val message = com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardGuide.getGuidanceText(event.reason)
+                    snackBarHostState.showSnackbar(message)
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Phone Keyboard Mode") },
+                title = { Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_mode_title)) },
                 navigationIcon = {
                     IconButton(onClick = { navigator.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
@@ -44,7 +59,7 @@ fun AnimatedVisibilityScope.PhoneKeyboardScreen(
                     Button(onClick = {
                         if(isScanning) viewModel.stopScan() else viewModel.startScan()
                     }) {
-                        Text(if (isScanning) "Stop Scan" else "Scan")
+                        Text(if (isScanning) stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_stop_scan_btn) else stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_scan_btn))
                     }
                 }
             )
@@ -56,15 +71,45 @@ fun AnimatedVisibilityScope.PhoneKeyboardScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            Text(
-                text = "Instructions: Open Android Bluetooth Keyboard/HID app on phone, enable Bluetooth keyboard/server/HID mode, keep app foreground, then pair from here.",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            var showGuide by remember { mutableStateOf(false) }
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_instructions),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { showGuide = !showGuide }) {
+                    Text(if (showGuide) stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_hide_guide) else stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_show_guide))
+                }
+            }
+
+            if (showGuide) {
+                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guide_title), style = MaterialTheme.typography.titleMedium)
+                        com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardGuide.senderAppCompatibilityGuide.forEach { guide ->
+                            Text("• ${guide.name}", style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guide_transport, guide.expectedTransport), style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guide_setup, guide.setupInstructions), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (candidates.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No candidates found.")
+                    if (isScanning) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_scanning_text))
+                        }
+                    } else {
+                        Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_tap_scan_text))
+                    }
                 }
             } else {
                 LazyColumn(
@@ -74,7 +119,7 @@ fun AnimatedVisibilityScope.PhoneKeyboardScreen(
                         CandidateCard(
                             candidate = candidate,
                             onPairClick = { viewModel.pairAndConnect(candidate) },
-                            onVerifyClick = { viewModel.verifyInput(candidate, navigator) }
+                            onVerifyClick = { viewModel.verifyInput(candidate) }
                         )
                     }
                 }
@@ -91,25 +136,25 @@ fun CandidateCard(
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = candidate.displayName ?: "Unknown BLE device", style = MaterialTheme.typography.titleMedium)
-            Text(text = "Transport: ${candidate.transport}", style = MaterialTheme.typography.bodySmall)
-            Text(text = "Bonded: ${candidate.isBonded}", style = MaterialTheme.typography.bodySmall)
-            Text(text = "HID Profile: ${candidate.hidProfileState}", style = MaterialTheme.typography.bodySmall)
-            Text(text = "Input Node: ${candidate.inputVerificationState}", style = MaterialTheme.typography.bodySmall)
+            Text(text = candidate.displayName ?: stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_unknown_device), style = MaterialTheme.typography.titleMedium)
+            Text(text = stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_card_transport, candidate.transport.name), style = MaterialTheme.typography.bodySmall)
+            Text(text = stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_card_bonded, candidate.isBonded), style = MaterialTheme.typography.bodySmall)
+            Text(text = stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_card_hid_profile, candidate.hidProfileState.name), style = MaterialTheme.typography.bodySmall)
+            Text(text = stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_card_input_node, candidate.inputVerificationState.name), style = MaterialTheme.typography.bodySmall)
 
             // Map the guidance action text
             val guidanceText = when(candidate.recommendedAction) {
-               com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardUserGuidance.OPEN_APP_ENABLE_ADVERTISING -> "Open the Android Keyboard app and enable Bluetooth keyboard mode."
-               com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardUserGuidance.PAIR_FROM_HOST -> "Pair from the TS18 host."
-               com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardUserGuidance.VERIFY_INPUT_IN_TEST -> "Verify keys in Keyboard Test."
-               com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardUserGuidance.CONFLICT_WARNING -> "This device is a Topway protected vendor device and shouldn't be paired."
+               com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardUserGuidance.OPEN_APP_ENABLE_ADVERTISING -> stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guidance_open_app)
+               com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardUserGuidance.PAIR_FROM_HOST -> stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guidance_pair)
+               com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardUserGuidance.VERIFY_INPUT_IN_TEST -> stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guidance_verify)
+               com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardUserGuidance.CONFLICT_WARNING -> stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guidance_conflict)
                else -> candidate.recommendedAction.name
             }
-            Text(text = "Guidance: $guidanceText", style = MaterialTheme.typography.bodySmall)
+            Text(text = stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_card_guidance, guidanceText), style = MaterialTheme.typography.bodySmall)
 
             if(candidate.lastFailureReason != null) {
                val failureText = com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardGuide.getGuidanceText(candidate.lastFailureReason)
-               Text(text = "Error: $failureText", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+               Text(text = stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_card_error, failureText), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -118,14 +163,14 @@ fun CandidateCard(
                     onClick = onPairClick,
                     enabled = !candidate.protectedTopwayRisk
                 ) {
-                    Text(if(candidate.isBonded) "Reconnect" else "Pair")
+                    Text(if(candidate.isBonded) stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_btn_reconnect) else stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_btn_pair))
                 }
 
                 if (candidate.isBonded) {
                     OutlinedButton(
                         onClick = onVerifyClick
                     ) {
-                        Text("Keyboard Test")
+                        Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_btn_test))
                     }
                 }
             }

@@ -31,7 +31,7 @@ object PhoneKeyboardPolicy {
         val allUuids = existing.serviceUuids + newEvidence.serviceUuids
         val hasHid = existing.hasHidService1812 || newEvidence.hasHidService1812 || allUuids.contains("00001812-0000-1000-8000-00805f9b34fb")
 
-        return existing.copy(
+        val merged = existing.copy(
             lastSeenMillis = newEvidence.timestampMillis,
             seenCount = existing.seenCount + 1,
             transport = finalTransport,
@@ -43,8 +43,20 @@ object PhoneKeyboardPolicy {
             lastRssi = newEvidence.rssi ?: existing.lastRssi,
             manufacturerDataPresent = existing.manufacturerDataPresent || newEvidence.manufacturerDataPresent,
             serviceDataPresent = existing.serviceDataPresent || newEvidence.serviceDataPresent,
-            inputVerificationState = if (existing.inputVerificationState == "Input Node Created") existing.inputVerificationState else existing.inputVerificationState // retain if verified
+            inputVerificationState = existing.inputVerificationState
         )
+        return recomputeGuidance(merged)
+    }
+
+    fun recomputeGuidance(candidate: PhoneKeyboardCandidate): PhoneKeyboardCandidate {
+        val recommendedAction = when {
+             candidate.protectedTopwayRisk -> PhoneKeyboardUserGuidance.CONFLICT_WARNING
+             candidate.isBonded && candidate.inputVerificationState == PhoneKeyboardInputVerificationState.NOT_VERIFIED -> PhoneKeyboardUserGuidance.VERIFY_INPUT_IN_TEST
+             candidate.isBonded && candidate.inputVerificationState == PhoneKeyboardInputVerificationState.NODE_CREATED -> PhoneKeyboardUserGuidance.VERIFY_INPUT_IN_TEST
+             candidate.isBonded && candidate.inputVerificationState == PhoneKeyboardInputVerificationState.EVENT_VERIFIED -> PhoneKeyboardUserGuidance.NO_ACTION_REQUIRED
+             else -> PhoneKeyboardUserGuidance.OPEN_APP_ENABLE_ADVERTISING
+        }
+        return candidate.copy(recommendedAction = recommendedAction)
     }
 
     fun calculateConfidenceScore(candidate: PhoneKeyboardCandidate): Int {
@@ -55,6 +67,7 @@ object PhoneKeyboardPolicy {
         if (name.contains("keyboard") || name.contains("hid")) score += 20
         if (candidate.transport == DeviceTransport.CLASSIC) score += 10
         if (candidate.transport == DeviceTransport.BLE) score += 10
+        if (candidate.transport == DeviceTransport.DUAL) score += 20
         return score
     }
 
@@ -63,17 +76,15 @@ object PhoneKeyboardPolicy {
         return policy.classify(address, name).laneOwner == BluetoothLaneOwner.TOPWAY_AUTOMOTIVE
     }
 
-    fun mapToCandidate(evidence: PhoneKeyboardScanEvidence, isBonded: Boolean, inputVerificationState: String, hidProfileState: String): PhoneKeyboardCandidate {
+    fun mapToCandidate(
+        evidence: PhoneKeyboardScanEvidence,
+        isBonded: Boolean,
+        inputVerificationState: PhoneKeyboardInputVerificationState,
+        hidProfileState: com.cbkii.btandroidts.domain.peripheral.ProfileConnectionState
+    ): PhoneKeyboardCandidate {
         val isProtected = isTopwayProtected(evidence.address, evidence.name)
 
-        val recommendedAction = when {
-             isProtected -> PhoneKeyboardUserGuidance.CONFLICT_WARNING
-             isBonded && inputVerificationState != "Input Node Created" -> PhoneKeyboardUserGuidance.VERIFY_INPUT_IN_TEST
-             isBonded && inputVerificationState == "Input Node Created" -> PhoneKeyboardUserGuidance.NO_ACTION_REQUIRED
-             else -> PhoneKeyboardUserGuidance.OPEN_APP_ENABLE_ADVERTISING
-        }
-
-        return PhoneKeyboardCandidate(
+        val candidate = PhoneKeyboardCandidate(
             candidateId = evidence.candidateId,
             address = evidence.address,
             transport = evidence.transport,
@@ -94,8 +105,9 @@ object PhoneKeyboardPolicy {
             lastRssi = evidence.rssi,
             hidProfileState = hidProfileState,
             inputVerificationState = inputVerificationState,
-            recommendedAction = recommendedAction,
+            recommendedAction = PhoneKeyboardUserGuidance.NO_ACTION_REQUIRED,
             lastFailureReason = null
         )
+        return recomputeGuidance(candidate)
     }
 }

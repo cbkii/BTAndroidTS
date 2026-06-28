@@ -22,8 +22,8 @@ data class PhoneKeyboardCandidate(
     val isBonded: Boolean,
     val protectedTopwayRisk: Boolean,
     val lastRssi: Int?,
-    val hidProfileState: String,
-    val inputVerificationState: String,
+    val hidProfileState: com.cbkii.btandroidts.domain.peripheral.ProfileConnectionState,
+    val inputVerificationState: PhoneKeyboardInputVerificationState,
     val recommendedAction: PhoneKeyboardUserGuidance,
     val lastFailureReason: PhoneKeyboardFailureReason?
 )
@@ -73,9 +73,9 @@ data class PhoneKeyboardScanEvidence(
     val serviceDataPresent: Boolean = false
 )
 
-data class PhoneKeyboardValidationState(
-    val isVerified: Boolean,
-    val inputDeviceCreated: Boolean,
-    val keyboardEventReceived: Boolean,
-    val hidConnected: Boolean
-)
+enum class PhoneKeyboardInputVerificationState {
+    NOT_VERIFIED,
+    NODE_CREATED,
+    EVENT_VERIFIED,
+    FAILED
+}
