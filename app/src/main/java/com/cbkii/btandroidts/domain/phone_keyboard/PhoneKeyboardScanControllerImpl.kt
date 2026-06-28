@@ -16,12 +16,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 
 class PhoneKeyboardScanControllerImpl(
     private val inventoryRepository: BluetoothDeviceInventoryRepository,
@@ -71,21 +69,17 @@ class PhoneKeyboardScanControllerImpl(
             val hidProfileState = hidStates[address] ?: ProfileConnectionState.UNKNOWN
             val hasInputNode = inputDeviceRepository.hasInputDeviceFor(address)
 
-            // Note: Since runBlocking is generally discouraged in flows, we use a cached or non-suspending method if available
-            // but the repository getVerificationResult is a Flow.
-            // In a more robust architecture, we'd combine this flow as well, but for now we poll
-            val verificationResult = inputDeviceRepository.getVerificationResult(address)
-            var isEventVerified = false
-            try {
-                 // Fast check, assuming latest value is cached or available quickly
-                 scope.launch {
-                     verificationResult.collect { result -> isEventVerified = result?.success == true }
-                 }.cancel() // just peeking is not really viable here.
-            } catch(e: Exception){}
+            // Check verification result safely via short timeout
+            val result = withTimeoutOrNull(500L) {
+                 inputDeviceRepository.getVerificationResult(address).first()
+            }
+            val isEventVerified = result?.success == true
 
-            // To properly resolve the flow cleanly, we rely on the node creation
-            // We will trust the input repository state if we can get it
-            val inputVerificationState = if(hasInputNode) PhoneKeyboardInputVerificationState.NODE_CREATED else PhoneKeyboardInputVerificationState.NOT_VERIFIED
+            val inputVerificationState = when {
+                 isEventVerified -> PhoneKeyboardInputVerificationState.EVENT_VERIFIED
+                 hasInputNode -> PhoneKeyboardInputVerificationState.NODE_CREATED
+                 else -> PhoneKeyboardInputVerificationState.NOT_VERIFIED
+            }
 
             if (currentCandidates.containsKey(addressStr)) {
                 val existing = currentCandidates[addressStr]!!
@@ -107,18 +101,7 @@ class PhoneKeyboardScanControllerImpl(
         }
 
         val validCandidates = currentCandidates.values
-            .filter { PhoneKeyboardPolicy.shouldRetainCandidate(PhoneKeyboardScanEvidence(
-                candidateId = it.candidateId,
-                address = it.address,
-                transport = it.transport,
-                name = it.displayName,
-                rssi = it.lastRssi,
-                isConnectable = it.isConnectable,
-                addressType = it.addressType,
-                hasHidService1812 = it.hasHidService1812,
-                serviceUuids = it.serviceUuids,
-                timestampMillis = it.lastSeenMillis
-            ), currentTime) }
+            .filter { PhoneKeyboardPolicy.shouldRetainCandidate(it, currentTime) }
             .sortedByDescending { PhoneKeyboardPolicy.calculateConfidenceScore(it) }
 
         _candidatesCache = validCandidates

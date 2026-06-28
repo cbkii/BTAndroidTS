@@ -13,6 +13,11 @@ object PhoneKeyboardPolicy {
         return (currentTimeMillis - evidence.timestampMillis) <= CANDIDATE_TTL_MILLIS
     }
 
+    fun shouldRetainCandidate(candidate: PhoneKeyboardCandidate, currentTimeMillis: Long): Boolean {
+        // Retain if seen within TTL
+        return (currentTimeMillis - candidate.lastSeenMillis) <= CANDIDATE_TTL_MILLIS
+    }
+
     fun mergeCandidates(existing: PhoneKeyboardCandidate, newEvidence: PhoneKeyboardScanEvidence, currentTimeMillis: Long): PhoneKeyboardCandidate {
         // Only merge if identity matches closely enough.
         // Don't merge random address BLE devices with unrelated Classic devices if identity is weak.
