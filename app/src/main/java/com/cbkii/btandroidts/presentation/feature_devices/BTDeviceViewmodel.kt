@@ -73,20 +73,27 @@ class BTDeviceViewmodel(
 		inventoryRepository.capabilities,
 		_isPairedDevicesReady,
 	) { inventoryDevices, capabilities, pairedDevicesLoaded ->
+		val paired = mutableListOf<BluetoothDeviceModel>()
+		val available = mutableListOf<BluetoothDeviceModel>()
+		val le = mutableListOf<BluetoothLEDeviceModel>()
+
+		inventoryDevices.forEach { device ->
+			if (device.bondState == BondStatus.BONDED) {
+				paired.add(device.toClassicModel())
+			} else if (DeviceTransport.CLASSIC in device.transports) {
+				available.add(device.toClassicModel())
+			}
+
+			if (DeviceTransport.BLE in device.transports) {
+				le.add(device.toLeModel())
+			}
+		}
+
 		BTDevicesScreenState(
-			pairedDevices = inventoryDevices
-				.filter { it.bondState == BondStatus.BONDED }
-				.map(UnifiedBluetoothDevice::toClassicModel)
-				.toPersistentList(),
+			pairedDevices = paired.toPersistentList(),
 			isPairedDevicesLoaded = pairedDevicesLoaded,
-			availableDevices = inventoryDevices
-				.filter { it.bondState != BondStatus.BONDED && DeviceTransport.CLASSIC in it.transports }
-				.map(UnifiedBluetoothDevice::toClassicModel)
-				.toPersistentList(),
-			leDevices = inventoryDevices
-				.filter { DeviceTransport.BLE in it.transports }
-				.map(UnifiedBluetoothDevice::toLeModel)
-				.toPersistentList(),
+			availableDevices = available.toPersistentList(),
+			leDevices = le.toPersistentList(),
 			inventoryDevices = inventoryDevices.toPersistentList(),
 			capabilities = capabilities.toPersistentList(),
 		)

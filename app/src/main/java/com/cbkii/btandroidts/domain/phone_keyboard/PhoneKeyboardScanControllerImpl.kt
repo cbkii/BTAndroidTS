@@ -35,12 +35,14 @@ class PhoneKeyboardScanControllerImpl(
         }
     }
 
+    private val _currentCandidates = java.util.concurrent.ConcurrentHashMap<String, PhoneKeyboardCandidate>()
+
     override val candidates: StateFlow<List<PhoneKeyboardCandidate>> = combine(
         inventoryRepository.devices,
         hidHostController.profileStates,
         tickerFlow
     ) { unifiedDevices, hidStates, currentTime ->
-        val currentCandidates = _candidatesCache.associateBy { it.address.value }.toMutableMap()
+        val currentCandidates = _currentCandidates
 
         for (device in unifiedDevices) {
             val addressStr = device.address.value
@@ -100,15 +102,19 @@ class PhoneKeyboardScanControllerImpl(
             }
         }
 
+        val iterator = currentCandidates.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (!PhoneKeyboardPolicy.shouldRetainCandidate(entry.value, currentTime)) {
+                iterator.remove()
+            }
+        }
+
         val validCandidates = currentCandidates.values
-            .filter { PhoneKeyboardPolicy.shouldRetainCandidate(it, currentTime) }
             .sortedByDescending { PhoneKeyboardPolicy.calculateConfidenceScore(it) }
 
-        _candidatesCache = validCandidates
-        validCandidates
+        validCandidates.toList()
     }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    private var _candidatesCache: List<PhoneKeyboardCandidate> = emptyList()
 
     private val _isScanning = MutableStateFlow(false)
     override val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
@@ -131,6 +137,6 @@ class PhoneKeyboardScanControllerImpl(
     }
 
     override fun clearCandidates() {
-        _candidatesCache = emptyList()
+        _currentCandidates.clear()
     }
 }

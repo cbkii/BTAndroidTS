@@ -8,7 +8,6 @@ interface BatteryReader {
 
 	val currentBatteryLevel: Int
 
-	fun isBatteryChargingFlow(): Flow<Boolean>
 
 	fun batteryLevelFlow(): Flow<Int>
 }

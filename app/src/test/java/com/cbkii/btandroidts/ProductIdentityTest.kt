@@ -13,6 +13,6 @@ class ProductIdentityTest {
 
 	@Test
 	fun versionNameIsTs18ProductBaseline() {
-		assertEquals("18.0.1", BuildConfig.VERSION_NAME)
+		assertEquals("18.0.2", BuildConfig.VERSION_NAME)
 	}
 }

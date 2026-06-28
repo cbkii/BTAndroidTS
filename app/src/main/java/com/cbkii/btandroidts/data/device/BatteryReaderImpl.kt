@@ -22,34 +22,6 @@ class BatteryReaderImpl(private val context: Context) : BatteryReader {
 	override val currentBatteryLevel: Int
 		get() = _batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 0
 
-	override fun isBatteryChargingFlow(): Flow<Boolean> {
-		return callbackFlow {
-
-			val receiver = object : BroadcastReceiver() {
-				override fun onReceive(context: Context?, intent: Intent?) {
-					when (intent?.action) {
-						Intent.ACTION_POWER_CONNECTED -> trySend(true)
-						Intent.ACTION_POWER_DISCONNECTED -> trySend(false)
-					}
-				}
-			}
-
-			val intentFilter = IntentFilter().apply {
-				addAction(Intent.ACTION_POWER_CONNECTED)
-				addAction(Intent.ACTION_POWER_DISCONNECTED)
-			}
-
-			ContextCompat.registerReceiver(
-				context,
-				receiver,
-				intentFilter,
-				ContextCompat.RECEIVER_EXPORTED
-			)
-
-			awaitClose { context.unregisterReceiver(receiver) }
-		}
-	}
-
 	override fun batteryLevelFlow(): Flow<Int> {
 		return callbackFlow {
 
