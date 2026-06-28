@@ -32,6 +32,9 @@
   <string name="ts18_dashboard_advanced">Advanced Tools</string>
   <string name="ts18_dashboard_local_export">Local export</string>
   <string name="ts18_dashboard_rfcomm_gatt">RFCOMM / BLE GATT</string>
+  <string name="phone_keyboard_title">Phone Keyboard</string>
+  <string name="phone_keyboard_desc">Emulate physical inputs</string>
+  <string name="ts18_dashboard_supervision_desc">Manual reconcile</string>
   <string name="ts18_dashboard_scanning">Scanning</string>
   <string name="ts18_dashboard_available">Available</string>
   <string name="ts18_dashboard_requires_privilege">Requires privilege</string>
