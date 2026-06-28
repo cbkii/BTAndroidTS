@@ -46,6 +46,7 @@ import com.ramcosta.composedestinations.generated.destinations.BtServerRouteDest
 import com.ramcosta.composedestinations.generated.destinations.InfoDestination
 import com.ramcosta.composedestinations.generated.destinations.KeyboardTestDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsDestination
+import com.ramcosta.composedestinations.generated.destinations.PhoneKeyboardDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -151,6 +152,7 @@ fun AnimatedVisibilityScope.BTDevicesScreen(
 						Ts18DashboardAction.DIAGNOSTICS -> viewModel.onEvents(BTDevicesScreenEvents.ExportDiagnostics)
 						Ts18DashboardAction.ADVANCED_TOOLS -> viewModel.onEvents(BTDevicesScreenEvents.ShowAdvancedTools)
 						Ts18DashboardAction.KEYBOARD_TEST -> navigator.navigate(KeyboardTestDestination)
+						Ts18DashboardAction.PHONE_KEYBOARD_COMPAT -> navigator.navigate(PhoneKeyboardDestination)
 					}
 				},
 				navigation = {

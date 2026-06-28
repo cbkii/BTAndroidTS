@@ -27,4 +27,7 @@ object Routes {
 
 	// keyboard test route
 	const val KEYBOARD_TEST_ROUTE = "keyboard_test"
+
+	// phone keyboard route
+	const val PHONE_KEYBOARD_ROUTE = "phone_keyboard"
 }

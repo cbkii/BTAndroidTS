@@ -11,6 +11,7 @@ This matrix tracks real-device evidence for BTAndroidTS on Topway TS18.
 | | Selective unpair | Hypothesis | Should block unpair for Topway lane. |
 | **HID Host** | Connection state | Inferred | Reflection logic uses API 29 HID Host. |
 | | Input node creation | Requires TS18 validation | |
+| **Phone Keyboard** | Compatibility mode | Hypothesis | Dedicated UI and policy logic added, requires TS18 tests with phone apps. |
 | **Input UX** | Device matching | Inferred | Logic verified in JVM unit tests. |
 | | Success recording | Inferred | Persistence verified in DataStore tests. |
 | **OPP** | Share single file | Requires TS18 validation | Delegated to stock Android Bluetooth. |

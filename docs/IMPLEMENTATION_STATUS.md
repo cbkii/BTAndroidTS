@@ -22,7 +22,7 @@ Status terms:
 | 7 | Persistent supervision | Complete | Protobuf DataStore policy, saved peripherals, retry state, safe mode, boot/package/adapter receiver and foreground reconcile service are implemented. ACC sleep/wake and real reconnect behavior require TS18 validation. |
 | 8 | Android 10 HID Host | Complete | Implemented code: isolated API-29 reflection adapter with `getConnectedDevices` and `getConnectionState` support, privilege gates and narrow R8 rules. TS18 runtime validation required: connected-device enumeration, connect/disconnect and input-node creation. |
 | 9 | Android input creation | Complete | Input-device repository added. Typing test screen added with real-time matching and success recording. |
-| 10 | Phone-as-keyboard/peripherals | Complete | Inventory/protection model supports Classic, BLE and peripheral classes. UI allows managing these as standard peripherals. |
+| 10 | Phone-as-keyboard/peripherals | Complete | Inventory/protection model supports Classic, BLE and peripheral classes. UI allows managing these as standard peripherals. Dedicated Phone Keyboard mode added. |
 | 11 | OPP file sharing | Complete | Implemented code: SEND/SEND_MULTIPLE/text parsing, stock OPP delegation, local cancellation/retry and persistent transfer history store with dedicated UI. TS18 runtime validation required: stock picker, destination selection and progress behavior. |
 | 12 | Safe OPP fallbacks | Complete | No inbound OBEX server or private OPP bridge was added. Stock OPP remains the only outbound path until exact APK contracts prove insufficient. |
 | 13 | Preserve Topway lane | Complete | Docs, protection policy and dashboard label phone/projection as vendor-owned. No Topway service writes added. |

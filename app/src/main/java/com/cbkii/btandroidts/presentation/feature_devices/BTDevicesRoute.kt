@@ -295,6 +295,7 @@ enum class Ts18DashboardAction {
 	DIAGNOSTICS,
 	ADVANCED_TOOLS,
 	KEYBOARD_TEST,
+	PHONE_KEYBOARD_COMPAT,
 }
 
 @Composable

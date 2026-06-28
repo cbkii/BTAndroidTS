@@ -150,6 +150,7 @@ The main screen is optimized for a 1280x720 landscape display:
 - **TS18 Safe Zones:** Content is padded to avoid the approximate 55px top status bar and right navigation bar.
 - **Glanceable States:** Connection states are explicitly labeled (e.g., "Pair", "Bonded", "HID active").
 - **Keyboard Test:** A dedicated tool to verify Bluetooth keyboard input is available from the dashboard.
+- **Phone Keyboard Mode:** Dedicated workflow to discover and test Android phones acting as Bluetooth keyboards.
 - **Advanced Tools:** Low-level tools like RFCOMM terminal and BLE GATT are moved under the "Advanced Tools" section.
 
 ### :revolving_hearts: Special Thanks
