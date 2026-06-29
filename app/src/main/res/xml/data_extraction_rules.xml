@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
-  <!-- Defence-in-depth: allowBackup=false disables normal app backup, but keep explicit excludes so future manifest changes do not silently include Bluetooth/TS18 data. -->
   <cloud-backup>
     <exclude domain="sharedpref" path="."/>
     <exclude domain="file" path="."/>
