@@ -232,14 +232,14 @@ private fun Ts18DashboardHeader(
 				modifier = Modifier.fillMaxWidth()
 			) {
 				DashboardButton(
-					label = "Phone Keyboard",
-					detail = "Emulate physical inputs",
+					label = stringResource(R.string.phone_keyboard_title),
+					detail = stringResource(R.string.phone_keyboard_desc),
 					onClick = { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) },
 					modifier = Modifier.weight(1f)
 				)
 				DashboardButton(
 					label = stringResource(R.string.ts18_dashboard_supervision),
-					detail = "Manual reconcile",
+					detail = stringResource(R.string.ts18_dashboard_supervision_desc),
 					onClick = { onAction(Ts18DashboardAction.SUPERVISION) },
 					modifier = Modifier.weight(1f)
 				)

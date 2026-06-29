@@ -18,5 +18,5 @@ fun InputStream.readResponseFromStream(
 			BTTerminalDisplayMode.DISPLAY_MODE_HEX -> buffer.toHexString(endIndex = bytesRead)
 		}
 		append(message)
-	} while (available() != 0)
+	} while (bytesRead == buffer.size || available() > 0)
 }

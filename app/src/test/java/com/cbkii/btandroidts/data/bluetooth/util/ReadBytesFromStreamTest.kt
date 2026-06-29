@@ -4,6 +4,7 @@ import com.cbkii.btandroidts.domain.settings.enums.BTTerminalDisplayMode
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.InputStream
 
 class ReadBytesFromStreamTest {
 
@@ -45,11 +46,37 @@ class ReadBytesFromStreamTest {
         assertEquals(inputStr, result)
     }
 
+    private class AvailableAlwaysZeroInputStream(
+        private val payload: ByteArray,
+    ) : InputStream() {
+        private var index = 0
+
+        override fun read(): Int {
+            if (index >= payload.size) return -1
+            return payload[index++].toInt() and 0xff
+        }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+            if (index >= payload.size) return -1
+            val count = minOf(length, payload.size - index)
+            payload.copyInto(buffer, destinationOffset = offset, startIndex = index, endIndex = index + count)
+            index += count
+            return count
+        }
+
+        override fun available(): Int = 0
+    }
+
     @Test
-    fun readResponseFromStream_stopsOnEofWithoutHanging() {
-        val inputStream = ByteArrayInputStream("short".toByteArray())
-        val result = inputStream.readResponseFromStream()
-        assertEquals("short", result)
-        // No hang occurred, test completes successfully
+    fun readResponseFromStream_stopsOnEofWithoutHangingWhenAvailableIsZero() {
+        val input = "short payload"
+        val inputStream = AvailableAlwaysZeroInputStream(input.toByteArray(Charsets.UTF_8))
+
+        val result = inputStream.readResponseFromStream(
+            buffer = ByteArray(4),
+            mode = BTTerminalDisplayMode.DISPLAY_MODE_TEXT,
+        )
+
+        assertEquals(input, result)
     }
 }
