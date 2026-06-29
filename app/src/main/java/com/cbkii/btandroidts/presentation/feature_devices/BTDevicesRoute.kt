@@ -7,11 +7,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
@@ -30,6 +27,33 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MenuOpen
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.tooling.preview.datasource.CollectionPreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.R
@@ -37,8 +61,6 @@ import com.cbkii.btandroidts.data.utils.hasBTScanPermission
 import com.cbkii.btandroidts.data.utils.hasLocationPermission
 import com.cbkii.btandroidts.domain.bluetooth.models.BluetoothDeviceModel
 import com.cbkii.btandroidts.domain.bluetooth_le.models.BluetoothLEDeviceModel
-import com.cbkii.btandroidts.domain.peripheral.CapabilityStatus
-import com.cbkii.btandroidts.domain.peripheral.PeripheralFeature
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BTDeviceRouteTopBar
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BTDevicesTabsLayout
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BluetoothDevicesList
@@ -63,7 +85,6 @@ fun BTDevicesRoute(
 	onSelectDevice: (BluetoothDeviceModel) -> Unit = {},
 	onSelectLeDevice: (BluetoothLEDeviceModel) -> Unit = {},
 	onDashboardAction: (Ts18DashboardAction) -> Unit = {},
-	navigation: @Composable () -> Unit = {},
 ) {
 	val context = LocalContext.current
 	val snackBarHostState = LocalSnackBarProvider.current
@@ -91,6 +112,8 @@ fun BTDevicesRoute(
 
 	val scrollBehaviour = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
+	var sidebarCollapsed by rememberSaveable { mutableStateOf(false) }
+
 	Scaffold(
 		topBar = {
 			BTDeviceRouteTopBar(
@@ -102,7 +125,6 @@ fun BTDevicesRoute(
 				stopClassicScan = { onEvent(BTDevicesScreenEvents.StopScan) },
 				startBLEScan = { onEvent(BTDevicesScreenEvents.StartLEDeviceScan) },
 				stopBLEScan = { onEvent(BTDevicesScreenEvents.StopLEDevicesScan) },
-				navigation = navigation,
 				scrollBehavior = scrollBehaviour,
 			)
 		},
@@ -112,32 +134,35 @@ fun BTDevicesRoute(
 			.padding(top = dimensionResource(R.dimen.ts18_status_bar_height))
 			.padding(end = dimensionResource(R.dimen.ts18_nav_bar_width)),
 	) { scPadding ->
-		Column(
-			verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.sc_padding)),
+		Row(
 			modifier = Modifier
 				.fillMaxSize()
 				.padding(scPadding)
 		) {
-			Ts18DashboardHeader(
-				state = state,
-				isScanning = isScanning,
+			Ts18ActionSidebar(
+				collapsed = sidebarCollapsed,
+				onCollapsedChange = { sidebarCollapsed = it },
 				onAction = onDashboardAction,
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(horizontal = dimensionResource(R.dimen.sc_padding))
+				modifier = Modifier.fillMaxHeight()
 			)
-			DevicesScreenModeContainer(
-				isActive = isBTActive,
-				hasPermission = hasBtPermission,
-				onBTPermissionChanged = { isGranted ->
-					hasBtPermission = isGranted
-					onEvent(BTDevicesScreenEvents.OnBTPermissionChanged(isGranted))
-				},
+
+			Column(
 				modifier = Modifier
-					.fillMaxWidth()
 					.weight(1f)
+					.fillMaxHeight()
 			) {
-				BTDevicesTabsLayout(
+				DevicesScreenModeContainer(
+					isActive = isBTActive,
+					hasPermission = hasBtPermission,
+					onBTPermissionChanged = { isGranted ->
+						hasBtPermission = isGranted
+						onEvent(BTDevicesScreenEvents.OnBTPermissionChanged(isGranted))
+					},
+					modifier = Modifier
+						.fillMaxWidth()
+						.weight(1f)
+				) {
+					BTDevicesTabsLayout(
 					isScanning = isScanning,
 					initialTab = initialTab,
 					onCurrentTabChanged = { type ->
@@ -173,136 +198,97 @@ fun BTDevicesRoute(
 							},
 							modifier = Modifier.fillMaxSize(),
 						)
-					},
-				)
+					}
+					)
+				}
 			}
 		}
 	}
 }
 
+@Suppress("DEPRECATION")
 @Composable
-private fun Ts18DashboardHeader(
-	state: BTDevicesScreenState,
-	isScanning: Boolean,
+fun Ts18ActionSidebar(
+	collapsed: Boolean,
+	onCollapsedChange: (Boolean) -> Unit,
 	onAction: (Ts18DashboardAction) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
-	val hidStatus = state.capabilities.firstOrNull { it.feature == PeripheralFeature.HID_HOST }?.status
-	val oppStatus = state.capabilities.firstOrNull { it.feature == PeripheralFeature.OPP_SHARE }?.status
-	val protectedCount = state.inventoryDevices.count { it.isProtected }
+	val scrollState = rememberScrollState()
 
-	ElevatedCard(modifier = modifier) {
-		Column(
-			verticalArrangement = Arrangement.spacedBy(8.dp),
-			modifier = Modifier.padding(12.dp)
+	BoxWithConstraints(modifier = modifier.fillMaxHeight()) {
+		val collapsedWidth = 80.dp
+		val expandedWidth = (maxWidth * 0.20f)
+			.coerceAtLeast(collapsedWidth)
+			.coerceAtMost(250.dp)
+		val actualWidth = if (collapsed) collapsedWidth else expandedWidth
+
+		NavigationRail(
+			modifier = Modifier
+				.width(actualWidth)
+				.fillMaxHeight(),
+			header = {
+				IconButton(onClick = { onCollapsedChange(!collapsed) }) {
+					Icon(
+						imageVector = if (collapsed) Icons.Default.Menu else Icons.Filled.MenuOpen,
+						contentDescription = stringResource(
+							id = if (collapsed) R.string.navigation_expand else R.string.navigation_collapse
+						)
+					)
+				}
+			}
 		) {
-			Text(
-				text = stringResource(R.string.ts18_dashboard_title),
-				style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-			)
-			Row(
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				modifier = Modifier.fillMaxWidth()
+			Column(
+				modifier = Modifier
+					.fillMaxHeight()
+					.verticalScroll(scrollState)
 			) {
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_phone_auto),
-					detail = stringResource(R.string.ts18_dashboard_vendor_owned),
-					onClick = { onAction(Ts18DashboardAction.PHONE_AUTO) },
-					modifier = Modifier.weight(1f)
-				)
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_peripherals),
-					detail = stringResource(
-						R.string.ts18_dashboard_inventory_count,
-						state.inventoryDevices.size,
-						protectedCount
-					),
-					onClick = { onAction(Ts18DashboardAction.PERIPHERALS) },
-					modifier = Modifier.weight(1f)
-				)
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_file_share),
-					detail = oppStatus.toDashboardText(),
-					onClick = { onAction(Ts18DashboardAction.FILE_SHARING) },
-					modifier = Modifier.weight(1f)
-				)
-			}
-			Row(
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				modifier = Modifier.fillMaxWidth()
-			) {
-				DashboardButton(
-					label = stringResource(R.string.phone_keyboard_title),
-					detail = stringResource(R.string.phone_keyboard_desc),
-					onClick = { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) },
-					modifier = Modifier.weight(1f)
-				)
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_supervision),
-					detail = stringResource(R.string.ts18_dashboard_supervision_desc),
-					onClick = { onAction(Ts18DashboardAction.SUPERVISION) },
-					modifier = Modifier.weight(1f)
-				)
-				DashboardButton(
-					label = stringResource(R.string.keyboard_test_title),
-					detail = stringResource(R.string.keyboard_test_desc),
-					onClick = { onAction(Ts18DashboardAction.KEYBOARD_TEST) },
-					modifier = Modifier.weight(1f)
-				)
-			}
-			Row(
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				modifier = Modifier.fillMaxWidth()
-			) {
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_diagnostics),
-					detail = stringResource(R.string.ts18_dashboard_local_export),
-					onClick = { onAction(Ts18DashboardAction.DIAGNOSTICS) },
-					modifier = Modifier.weight(1f)
-				)
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_advanced),
-					detail = stringResource(R.string.ts18_dashboard_rfcomm_gatt),
-					onClick = { onAction(Ts18DashboardAction.ADVANCED_TOOLS) },
-					modifier = Modifier.weight(1f)
-				)
-				androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
+				SidebarItem(collapsed, Icons.Default.Phone, R.string.ts18_dashboard_phone_auto) { onAction(Ts18DashboardAction.PHONE_AUTO) }
+				SidebarItem(collapsed, Icons.Default.Devices, R.string.ts18_dashboard_peripherals) { onAction(Ts18DashboardAction.PERIPHERALS) }
+				SidebarItem(collapsed, Icons.Filled.Send, R.string.ts18_dashboard_file_share) { onAction(Ts18DashboardAction.FILE_SHARING) }
+				SidebarItem(collapsed, Icons.Default.Warning, R.string.ts18_dashboard_supervision) { onAction(Ts18DashboardAction.SUPERVISION) }
+				SidebarItem(collapsed, Icons.Default.BugReport, R.string.ts18_dashboard_diagnostics) { onAction(Ts18DashboardAction.DIAGNOSTICS) }
+				SidebarItem(collapsed, Icons.Default.Keyboard, R.string.keyboard_test_title) { onAction(Ts18DashboardAction.KEYBOARD_TEST) }
+				SidebarItem(collapsed, Icons.Default.Phone, R.string.phone_keyboard_title) { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) }
+				SidebarItem(collapsed, Icons.Default.Settings, R.string.settings_route_title) { onAction(Ts18DashboardAction.SETTINGS) }
+				SidebarItem(collapsed, Icons.Default.Info, R.string.about_route_title) { onAction(Ts18DashboardAction.ABOUT) }
+				SidebarItem(collapsed, Icons.Default.Build, R.string.bt_server_route) { onAction(Ts18DashboardAction.BT_SERVER) }
+				SidebarItem(collapsed, Icons.Default.Bluetooth, R.string.ble_server_title) { onAction(Ts18DashboardAction.BLE_SERVER) }
 			}
 		}
 	}
 }
 
+
+
 @Composable
-private fun DashboardButton(
-	label: String,
-	detail: String,
+private fun SidebarItem(
+	collapsed: Boolean,
+	icon: ImageVector,
+	labelRes: Int,
 	onClick: () -> Unit,
-	modifier: Modifier = Modifier,
 ) {
-	FilledTonalButton(
+	NavigationRailItem(
+		icon = {
+			Icon(
+				imageVector = icon,
+				contentDescription = stringResource(labelRes)
+			)
+		},
+		label = if (!collapsed) {
+			{
+				Text(
+					text = stringResource(labelRes),
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis
+				)
+			}
+		} else {
+			null
+		},
+		selected = false,
 		onClick = onClick,
-		modifier = modifier.heightIn(min = dimensionResource(R.dimen.dashboard_card_min_height)),
-		shape = androidx.compose.material3.MaterialTheme.shapes.medium,
-		contentPadding = PaddingValues(16.dp)
-	) {
-		Column(
-			modifier = Modifier.fillMaxWidth(),
-			verticalArrangement = Arrangement.Center
-		) {
-			Text(
-				text = label,
-				style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-				maxLines = 1,
-				overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-			)
-			Text(
-				text = detail,
-				style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-				maxLines = 2,
-				overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-			)
-		}
-	}
+	)
 }
 
 enum class Ts18DashboardAction {
@@ -311,21 +297,15 @@ enum class Ts18DashboardAction {
 	FILE_SHARING,
 	SUPERVISION,
 	DIAGNOSTICS,
-	ADVANCED_TOOLS,
 	KEYBOARD_TEST,
 	PHONE_KEYBOARD_COMPAT,
+	SETTINGS,
+	ABOUT,
+	BT_SERVER,
+	BLE_SERVER
 }
 
-@Composable
-private fun CapabilityStatus?.toDashboardText(): String = when (this) {
-	CapabilityStatus.AVAILABLE -> stringResource(R.string.ts18_dashboard_available)
-	CapabilityStatus.REQUIRES_PRIVILEGE -> stringResource(R.string.ts18_dashboard_requires_privilege)
-	CapabilityStatus.REQUIRES_ROOT -> stringResource(R.string.ts18_dashboard_requires_root)
-	CapabilityStatus.REQUIRES_DEVICE_VALIDATION -> stringResource(R.string.ts18_dashboard_requires_validation)
-	CapabilityStatus.FAILED -> stringResource(R.string.ts18_dashboard_failed)
-	CapabilityStatus.UNAVAILABLE,
-	null -> stringResource(R.string.ts18_dashboard_unavailable)
-}
+
 
 private class BTDeviceClassicalScreenStateParams :
 	CollectionPreviewParameterProvider<BTDevicesScreenState>(
@@ -347,7 +327,8 @@ private fun BTDeviceRouteWithClassicDevicesPreview(
 		isScanning = false,
 		state = state,
 		onEvent = {},
-		onSelectDevice = { }
+		onSelectDevice = { },
+		onSelectLeDevice = { }
 	)
 }
 
@@ -370,6 +351,7 @@ private fun BTDeviceRouteWithLEDevicesPreview(
 		isScanning = false,
 		state = state,
 		onEvent = {},
-		onSelectDevice = { }
+		onSelectDevice = { },
+		onSelectLeDevice = { }
 	)
 }

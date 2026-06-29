@@ -5,7 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.launch
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
@@ -27,7 +27,6 @@ import com.cbkii.btandroidts.presentation.util.BluetoothTypes
 fun BTDeviceRouteTopBar(
 	canShowScanOption: Boolean,
 	isScanning: Boolean,
-	navigation: @Composable () -> Unit,
 	modifier: Modifier = Modifier,
 	currentTab: BluetoothTypes = BluetoothTypes.CLASSIC,
 	hasLocationPermission: Boolean = false,
@@ -60,9 +59,8 @@ fun BTDeviceRouteTopBar(
 	val startScan by rememberUpdatedState(if (currentTab == BluetoothTypes.CLASSIC) startClassicScan else startBLEScan)
 	val stopScan by rememberUpdatedState(if (currentTab == BluetoothTypes.CLASSIC) stopClassicScan else stopBLEScan)
 
-	MediumTopAppBar(
+	TopAppBar(
 		title = { Text(text = stringResource(id = R.string.devices_route)) },
-		navigationIcon = navigation,
 		actions = {
 			AnimatedScanButton(
 				isScanning = isScanning,
