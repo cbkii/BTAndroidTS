@@ -123,7 +123,9 @@ class PhoneKeyboardScanControllerImpl(
             } else {
                 // Generation changed during the suspend/combine process (e.g. clearCandidates was called)
                 // Discard stale working calculation and return the current fresh state.
-                return@combine _currentCandidates.values.toList()
+                return@combine _currentCandidates.values
+                    .sortedByDescending { PhoneKeyboardPolicy.calculateConfidenceScore(it) }
+                    .toList()
             }
         }
 
