@@ -138,23 +138,8 @@ BTAndroidTS must not:
 Developer, reviewer, and AI-agent guidance lives outside this end-user README:
 
 - [AGENTS.md](AGENTS.md)
-- [docs/TS18_DEVICE_CONTEXT.md](docs/TS18_DEVICE_CONTEXT.md)
-- [docs/BLUETOOTH_LANE_MODEL.md](docs/BLUETOOTH_LANE_MODEL.md)
-- [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md)
-- [docs/INSTALLATION_OPERATION_ROLLBACK.md](docs/INSTALLATION_OPERATION_ROLLBACK.md)
-
+- [docs/TS18_DEVELOPMENT_GUIDE.md](docs/TS18_DEVELOPMENT_GUIDE.md)
+- [docs/ROADMAP.md](docs/ROADMAP.md)
 ## TS18 Dashboard Layout
 
-The main screen is optimized for a 1280x720 landscape display:
-- **Large Controls:** Dashboard actions are presented as large cards for easy touch access.
-- **TS18 Safe Zones:** Content is padded to avoid the approximate 55px top status bar and right navigation bar.
-- **Glanceable States:** Connection states are explicitly labeled (e.g., "Pair", "Bonded", "HID active").
-- **Keyboard Test:** A dedicated tool to verify Bluetooth keyboard input is available from the dashboard.
-- **Phone Keyboard Mode:** Dedicated workflow to discover and test Android phones acting as Bluetooth keyboards.
-- **Advanced Tools:** Low-level tools like RFCOMM terminal and BLE GATT are moved under the "Advanced Tools" section.
-
-### :revolving_hearts: Special Thanks
-
-Special thanks to [upstream/original Author](https://github.com/tuuhin/BTAndroidApp/issues/new)    ヾ(＠⌒ー⌒＠)ノ
-
-If you encounter any problems or bugs in the app, please raise an [issue](https://github.com/cbkii/BTAndroidTS/issues/new)
+The app targets a 1280x720 landscape TS18 display with safe-zone padding for the approximate 55px top status bar and right navigation region. UI changes should preserve large, predictable touch targets while maximizing visible space for the Bluetooth device lists. Current in-car UX direction is a compact top bar plus a persistent, collapsible left action sidebar. See [docs/ROADMAP.md](docs/ROADMAP.md).

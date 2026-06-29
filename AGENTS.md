@@ -160,9 +160,10 @@ inadequate.
 
 ## Documentation Split
 
-- `README.md`: end-user overview, install choices, app usage, safety summary.
-- `CONTRIBUTING.md`: contributor workflow and validation requirements.
-- `AGENTS.md`: repository rules, architecture, TS18 constraints, and AI-agent guidance.
-- `docs/`: detailed evidence, status, validation matrix, installation/rollback, and lane model.
+- `README.md`: end-user overview, install choices, app usage, and safety summary.
+- `CONTRIBUTING.md`: contributor workflow if present.
+- `AGENTS.md`: repository rules, architecture constraints, TS18 safety boundaries, and AI-agent guidance.
+- `docs/TS18_DEVELOPMENT_GUIDE.md`: consolidated technical/evidence/status/validation/rollback/lane reference.
+- `docs/ROADMAP.md`: planned and incomplete work.
 
-Keep this split when editing Markdown.
+Keep this split when editing Markdown. Do not commit generated review exports, prompt transcripts, large third-party source snapshots, CI logs, or zipped research packs unless a future task explicitly requires a small curated reference.
