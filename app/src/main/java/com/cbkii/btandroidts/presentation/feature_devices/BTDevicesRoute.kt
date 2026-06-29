@@ -30,6 +30,30 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MenuOpen
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.tooling.preview.datasource.CollectionPreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.R
@@ -91,6 +115,8 @@ fun BTDevicesRoute(
 
 	val scrollBehaviour = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
+	var sidebarCollapsed by rememberSaveable { mutableStateOf(false) }
+
 	Scaffold(
 		topBar = {
 			BTDeviceRouteTopBar(
@@ -112,32 +138,37 @@ fun BTDevicesRoute(
 			.padding(top = dimensionResource(R.dimen.ts18_status_bar_height))
 			.padding(end = dimensionResource(R.dimen.ts18_nav_bar_width)),
 	) { scPadding ->
-		Column(
-			verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.sc_padding)),
+		Row(
 			modifier = Modifier
 				.fillMaxSize()
 				.padding(scPadding)
 		) {
-			Ts18DashboardHeader(
+			Ts18ActionSidebar(
+				collapsed = sidebarCollapsed,
+				onCollapsedChange = { sidebarCollapsed = it },
 				state = state,
 				isScanning = isScanning,
 				onAction = onDashboardAction,
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(horizontal = dimensionResource(R.dimen.sc_padding))
+				modifier = Modifier.fillMaxHeight()
 			)
-			DevicesScreenModeContainer(
-				isActive = isBTActive,
-				hasPermission = hasBtPermission,
-				onBTPermissionChanged = { isGranted ->
-					hasBtPermission = isGranted
-					onEvent(BTDevicesScreenEvents.OnBTPermissionChanged(isGranted))
-				},
+
+			Column(
 				modifier = Modifier
-					.fillMaxWidth()
 					.weight(1f)
+					.fillMaxHeight()
 			) {
-				BTDevicesTabsLayout(
+				DevicesScreenModeContainer(
+					isActive = isBTActive,
+					hasPermission = hasBtPermission,
+					onBTPermissionChanged = { isGranted ->
+						hasBtPermission = isGranted
+						onEvent(BTDevicesScreenEvents.OnBTPermissionChanged(isGranted))
+					},
+					modifier = Modifier
+						.fillMaxWidth()
+						.weight(1f)
+				) {
+					BTDevicesTabsLayout(
 					isScanning = isScanning,
 					initialTab = initialTab,
 					onCurrentTabChanged = { type ->
@@ -173,137 +204,118 @@ fun BTDevicesRoute(
 							},
 							modifier = Modifier.fillMaxSize(),
 						)
-					},
-				)
+					}
+					)
+				}
 			}
 		}
 	}
 }
 
 @Composable
-private fun Ts18DashboardHeader(
+fun Ts18ActionSidebar(
+	collapsed: Boolean,
+	onCollapsedChange: (Boolean) -> Unit,
 	state: BTDevicesScreenState,
 	isScanning: Boolean,
 	onAction: (Ts18DashboardAction) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
-	val hidStatus = state.capabilities.firstOrNull { it.feature == PeripheralFeature.HID_HOST }?.status
-	val oppStatus = state.capabilities.firstOrNull { it.feature == PeripheralFeature.OPP_SHARE }?.status
-	val protectedCount = state.inventoryDevices.count { it.isProtected }
+	val scrollState = rememberScrollState()
 
-	ElevatedCard(modifier = modifier) {
-		Column(
-			verticalArrangement = Arrangement.spacedBy(8.dp),
-			modifier = Modifier.padding(12.dp)
+	BoxWithConstraints(modifier = modifier.fillMaxHeight()) {
+		val maxAllowedWidth = maxWidth * 0.20f
+		val actualWidth = if (collapsed) 80.dp else maxAllowedWidth.coerceAtMost(250.dp)
+
+		NavigationRail(
+			modifier = Modifier
+				.widthIn(max = actualWidth)
+				.fillMaxHeight(),
+			header = {
+				IconButton(onClick = { onCollapsedChange(!collapsed) }) {
+					Icon(
+						imageVector = if (collapsed) Icons.Default.Menu else Icons.Default.MenuOpen,
+						contentDescription = stringResource(id = R.string.menu_option_more)
+					)
+				}
+			}
 		) {
-			Text(
-				text = stringResource(R.string.ts18_dashboard_title),
-				style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-			)
-			Row(
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				modifier = Modifier.fillMaxWidth()
+			Column(
+				modifier = Modifier
+					.fillMaxHeight()
+					.verticalScroll(scrollState)
 			) {
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_phone_auto),
-					detail = stringResource(R.string.ts18_dashboard_vendor_owned),
-					onClick = { onAction(Ts18DashboardAction.PHONE_AUTO) },
-					modifier = Modifier.weight(1f)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Phone, contentDescription = stringResource(R.string.ts18_dashboard_phone_auto)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_phone_auto), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.PHONE_AUTO) }
 				)
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_peripherals),
-					detail = stringResource(
-						R.string.ts18_dashboard_inventory_count,
-						state.inventoryDevices.size,
-						protectedCount
-					),
-					onClick = { onAction(Ts18DashboardAction.PERIPHERALS) },
-					modifier = Modifier.weight(1f)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Devices, contentDescription = stringResource(R.string.ts18_dashboard_peripherals)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_peripherals), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.PERIPHERALS) }
 				)
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_file_share),
-					detail = oppStatus.toDashboardText(),
-					onClick = { onAction(Ts18DashboardAction.FILE_SHARING) },
-					modifier = Modifier.weight(1f)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Send, contentDescription = stringResource(R.string.ts18_dashboard_file_share)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_file_share), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.FILE_SHARING) }
 				)
-			}
-			Row(
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				modifier = Modifier.fillMaxWidth()
-			) {
-				DashboardButton(
-					label = stringResource(R.string.phone_keyboard_title),
-					detail = stringResource(R.string.phone_keyboard_desc),
-					onClick = { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) },
-					modifier = Modifier.weight(1f)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Warning, contentDescription = stringResource(R.string.ts18_dashboard_supervision)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_supervision), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.SUPERVISION) }
 				)
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_supervision),
-					detail = stringResource(R.string.ts18_dashboard_supervision_desc),
-					onClick = { onAction(Ts18DashboardAction.SUPERVISION) },
-					modifier = Modifier.weight(1f)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.BugReport, contentDescription = stringResource(R.string.ts18_dashboard_diagnostics)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_diagnostics), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.DIAGNOSTICS) }
 				)
-				DashboardButton(
-					label = stringResource(R.string.keyboard_test_title),
-					detail = stringResource(R.string.keyboard_test_desc),
-					onClick = { onAction(Ts18DashboardAction.KEYBOARD_TEST) },
-					modifier = Modifier.weight(1f)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Keyboard, contentDescription = stringResource(R.string.keyboard_test_title)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.keyboard_test_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.KEYBOARD_TEST) }
 				)
-			}
-			Row(
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				modifier = Modifier.fillMaxWidth()
-			) {
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_diagnostics),
-					detail = stringResource(R.string.ts18_dashboard_local_export),
-					onClick = { onAction(Ts18DashboardAction.DIAGNOSTICS) },
-					modifier = Modifier.weight(1f)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Phone, contentDescription = stringResource(R.string.phone_keyboard_title)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.phone_keyboard_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) }
 				)
-				DashboardButton(
-					label = stringResource(R.string.ts18_dashboard_advanced),
-					detail = stringResource(R.string.ts18_dashboard_rfcomm_gatt),
-					onClick = { onAction(Ts18DashboardAction.ADVANCED_TOOLS) },
-					modifier = Modifier.weight(1f)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_route_title)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.settings_route_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.SETTINGS) }
 				)
-				androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Info, contentDescription = stringResource(R.string.about_route_title)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.about_route_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.ABOUT) }
+				)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Build, contentDescription = stringResource(R.string.bt_server_route)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.bt_server_route), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.BT_SERVER) }
+				)
+				NavigationRailItem(
+					icon = { Icon(Icons.Default.Bluetooth, contentDescription = stringResource(R.string.ble_server_title)) },
+					label = if (!collapsed) { { Text(stringResource(R.string.ble_server_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
+					selected = false,
+					onClick = { onAction(Ts18DashboardAction.BLE_SERVER) }
+				)
 			}
 		}
 	}
 }
 
-@Composable
-private fun DashboardButton(
-	label: String,
-	detail: String,
-	onClick: () -> Unit,
-	modifier: Modifier = Modifier,
-) {
-	FilledTonalButton(
-		onClick = onClick,
-		modifier = modifier.heightIn(min = dimensionResource(R.dimen.dashboard_card_min_height)),
-		shape = androidx.compose.material3.MaterialTheme.shapes.medium,
-		contentPadding = PaddingValues(16.dp)
-	) {
-		Column(
-			modifier = Modifier.fillMaxWidth(),
-			verticalArrangement = Arrangement.Center
-		) {
-			Text(
-				text = label,
-				style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-				maxLines = 1,
-				overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-			)
-			Text(
-				text = detail,
-				style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-				maxLines = 2,
-				overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-			)
-		}
-	}
-}
 
 enum class Ts18DashboardAction {
 	PHONE_AUTO,
@@ -311,9 +323,12 @@ enum class Ts18DashboardAction {
 	FILE_SHARING,
 	SUPERVISION,
 	DIAGNOSTICS,
-	ADVANCED_TOOLS,
 	KEYBOARD_TEST,
 	PHONE_KEYBOARD_COMPAT,
+	SETTINGS,
+	ABOUT,
+	BT_SERVER,
+	BLE_SERVER
 }
 
 @Composable
@@ -347,7 +362,8 @@ private fun BTDeviceRouteWithClassicDevicesPreview(
 		isScanning = false,
 		state = state,
 		onEvent = {},
-		onSelectDevice = { }
+		onSelectDevice = { },
+		onSelectLeDevice = { }
 	)
 }
 
@@ -370,6 +386,7 @@ private fun BTDeviceRouteWithLEDevicesPreview(
 		isScanning = false,
 		state = state,
 		onEvent = {},
-		onSelectDevice = { }
+		onSelectDevice = { },
+		onSelectLeDevice = { }
 	)
 }
