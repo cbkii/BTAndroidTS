@@ -223,8 +223,11 @@ fun Ts18ActionSidebar(
 	val scrollState = rememberScrollState()
 
 	BoxWithConstraints(modifier = modifier.fillMaxHeight()) {
-		val maxAllowedWidth = maxWidth * 0.20f
-		val actualWidth = if (collapsed) 80.dp else maxAllowedWidth.coerceAtMost(250.dp)
+		val collapsedWidth = 80.dp
+		val expandedWidth = (maxWidth * 0.20f)
+			.coerceAtLeast(collapsedWidth)
+			.coerceAtMost(250.dp)
+		val actualWidth = if (collapsed) collapsedWidth else expandedWidth
 
 		NavigationRail(
 			modifier = Modifier
