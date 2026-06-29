@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.data.utils.hasBTScanPermission
 import com.cbkii.btandroidts.data.utils.hasLocationPermission
-import com.cbkii.btandroidts.domain.peripheral.CapabilityStatus
 import com.cbkii.btandroidts.domain.bluetooth.models.BluetoothDeviceModel
 import com.cbkii.btandroidts.domain.bluetooth_le.models.BluetoothLEDeviceModel
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BTDeviceRouteTopBar
@@ -126,7 +125,6 @@ fun BTDevicesRoute(
 				stopClassicScan = { onEvent(BTDevicesScreenEvents.StopScan) },
 				startBLEScan = { onEvent(BTDevicesScreenEvents.StartLEDeviceScan) },
 				stopBLEScan = { onEvent(BTDevicesScreenEvents.StopLEDevicesScan) },
-				navigation = {},
 				scrollBehavior = scrollBehaviour,
 			)
 		},
@@ -144,8 +142,6 @@ fun BTDevicesRoute(
 			Ts18ActionSidebar(
 				collapsed = sidebarCollapsed,
 				onCollapsedChange = { sidebarCollapsed = it },
-				state = state,
-				isScanning = isScanning,
 				onAction = onDashboardAction,
 				modifier = Modifier.fillMaxHeight()
 			)
@@ -215,8 +211,6 @@ fun BTDevicesRoute(
 fun Ts18ActionSidebar(
 	collapsed: Boolean,
 	onCollapsedChange: (Boolean) -> Unit,
-	state: BTDevicesScreenState,
-	isScanning: Boolean,
 	onAction: (Ts18DashboardAction) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
@@ -249,72 +243,17 @@ fun Ts18ActionSidebar(
 					.fillMaxHeight()
 					.verticalScroll(scrollState)
 			) {
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.Phone, contentDescription = stringResource(R.string.ts18_dashboard_phone_auto)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_phone_auto), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.PHONE_AUTO) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.Devices, contentDescription = stringResource(R.string.ts18_dashboard_peripherals)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_peripherals), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.PERIPHERALS) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Filled.Send, contentDescription = stringResource(R.string.ts18_dashboard_file_share)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_file_share), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.FILE_SHARING) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.Warning, contentDescription = stringResource(R.string.ts18_dashboard_supervision)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_supervision), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.SUPERVISION) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.BugReport, contentDescription = stringResource(R.string.ts18_dashboard_diagnostics)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_diagnostics), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.DIAGNOSTICS) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.Keyboard, contentDescription = stringResource(R.string.keyboard_test_title)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.keyboard_test_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.KEYBOARD_TEST) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.Phone, contentDescription = stringResource(R.string.phone_keyboard_title)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.phone_keyboard_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_route_title)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.settings_route_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.SETTINGS) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.Info, contentDescription = stringResource(R.string.about_route_title)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.about_route_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.ABOUT) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.Build, contentDescription = stringResource(R.string.bt_server_route)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.bt_server_route), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.BT_SERVER) }
-				)
-				NavigationRailItem(
-					icon = { Icon(Icons.Default.Bluetooth, contentDescription = stringResource(R.string.ble_server_title)) },
-					label = if (!collapsed) { { Text(stringResource(R.string.ble_server_title), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
-					selected = false,
-					onClick = { onAction(Ts18DashboardAction.BLE_SERVER) }
-				)
+				SidebarItem(collapsed, Icons.Default.Phone, R.string.ts18_dashboard_phone_auto) { onAction(Ts18DashboardAction.PHONE_AUTO) }
+				SidebarItem(collapsed, Icons.Default.Devices, R.string.ts18_dashboard_peripherals) { onAction(Ts18DashboardAction.PERIPHERALS) }
+				SidebarItem(collapsed, Icons.Filled.Send, R.string.ts18_dashboard_file_share) { onAction(Ts18DashboardAction.FILE_SHARING) }
+				SidebarItem(collapsed, Icons.Default.Warning, R.string.ts18_dashboard_supervision) { onAction(Ts18DashboardAction.SUPERVISION) }
+				SidebarItem(collapsed, Icons.Default.BugReport, R.string.ts18_dashboard_diagnostics) { onAction(Ts18DashboardAction.DIAGNOSTICS) }
+				SidebarItem(collapsed, Icons.Default.Keyboard, R.string.keyboard_test_title) { onAction(Ts18DashboardAction.KEYBOARD_TEST) }
+				SidebarItem(collapsed, Icons.Default.Phone, R.string.phone_keyboard_title) { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) }
+				SidebarItem(collapsed, Icons.Default.Settings, R.string.settings_route_title) { onAction(Ts18DashboardAction.SETTINGS) }
+				SidebarItem(collapsed, Icons.Default.Info, R.string.about_route_title) { onAction(Ts18DashboardAction.ABOUT) }
+				SidebarItem(collapsed, Icons.Default.Build, R.string.bt_server_route) { onAction(Ts18DashboardAction.BT_SERVER) }
+				SidebarItem(collapsed, Icons.Default.Bluetooth, R.string.ble_server_title) { onAction(Ts18DashboardAction.BLE_SERVER) }
 			}
 		}
 	}
@@ -366,16 +305,7 @@ enum class Ts18DashboardAction {
 	BLE_SERVER
 }
 
-@Composable
-private fun CapabilityStatus?.toDashboardText(): String = when (this) {
-	CapabilityStatus.AVAILABLE -> stringResource(R.string.ts18_dashboard_available)
-	CapabilityStatus.REQUIRES_PRIVILEGE -> stringResource(R.string.ts18_dashboard_requires_privilege)
-	CapabilityStatus.REQUIRES_ROOT -> stringResource(R.string.ts18_dashboard_requires_root)
-	CapabilityStatus.REQUIRES_DEVICE_VALIDATION -> stringResource(R.string.ts18_dashboard_requires_validation)
-	CapabilityStatus.FAILED -> stringResource(R.string.ts18_dashboard_failed)
-	CapabilityStatus.UNAVAILABLE,
-	null -> stringResource(R.string.ts18_dashboard_unavailable)
-}
+
 
 private class BTDeviceClassicalScreenStateParams :
 	CollectionPreviewParameterProvider<BTDevicesScreenState>(

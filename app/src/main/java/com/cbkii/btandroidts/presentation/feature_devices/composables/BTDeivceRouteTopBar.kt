@@ -27,7 +27,6 @@ import com.cbkii.btandroidts.presentation.util.BluetoothTypes
 fun BTDeviceRouteTopBar(
 	canShowScanOption: Boolean,
 	isScanning: Boolean,
-	navigation: @Composable () -> Unit,
 	modifier: Modifier = Modifier,
 	currentTab: BluetoothTypes = BluetoothTypes.CLASSIC,
 	hasLocationPermission: Boolean = false,
@@ -62,7 +61,6 @@ fun BTDeviceRouteTopBar(
 
 	TopAppBar(
 		title = { Text(text = stringResource(id = R.string.devices_route)) },
-		navigationIcon = navigation,
 		actions = {
 			AnimatedScanButton(
 				isScanning = isScanning,
