@@ -78,7 +78,6 @@ fun AnimatedVisibilityScope.BTDevicesScreen(
 					Ts18DashboardAction.BLE_SERVER -> navigator.navigate(BleServerRouteDestination)
 				}
 			},
-			navigation = {},
 		)
 	}
 }

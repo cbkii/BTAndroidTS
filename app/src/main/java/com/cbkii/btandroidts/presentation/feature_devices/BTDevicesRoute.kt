@@ -7,11 +7,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
@@ -48,9 +45,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -59,10 +59,9 @@ import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.data.utils.hasBTScanPermission
 import com.cbkii.btandroidts.data.utils.hasLocationPermission
+import com.cbkii.btandroidts.domain.peripheral.CapabilityStatus
 import com.cbkii.btandroidts.domain.bluetooth.models.BluetoothDeviceModel
 import com.cbkii.btandroidts.domain.bluetooth_le.models.BluetoothLEDeviceModel
-import com.cbkii.btandroidts.domain.peripheral.CapabilityStatus
-import com.cbkii.btandroidts.domain.peripheral.PeripheralFeature
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BTDeviceRouteTopBar
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BTDevicesTabsLayout
 import com.cbkii.btandroidts.presentation.feature_devices.composables.BluetoothDevicesList
@@ -87,7 +86,6 @@ fun BTDevicesRoute(
 	onSelectDevice: (BluetoothDeviceModel) -> Unit = {},
 	onSelectLeDevice: (BluetoothLEDeviceModel) -> Unit = {},
 	onDashboardAction: (Ts18DashboardAction) -> Unit = {},
-	navigation: @Composable () -> Unit = {},
 ) {
 	val context = LocalContext.current
 	val snackBarHostState = LocalSnackBarProvider.current
@@ -128,7 +126,7 @@ fun BTDevicesRoute(
 				stopClassicScan = { onEvent(BTDevicesScreenEvents.StopScan) },
 				startBLEScan = { onEvent(BTDevicesScreenEvents.StartLEDeviceScan) },
 				stopBLEScan = { onEvent(BTDevicesScreenEvents.StopLEDevicesScan) },
-				navigation = navigation,
+				navigation = {},
 				scrollBehavior = scrollBehaviour,
 			)
 		},
@@ -212,6 +210,7 @@ fun BTDevicesRoute(
 	}
 }
 
+@Suppress("DEPRECATION")
 @Composable
 fun Ts18ActionSidebar(
 	collapsed: Boolean,
@@ -229,13 +228,15 @@ fun Ts18ActionSidebar(
 
 		NavigationRail(
 			modifier = Modifier
-				.widthIn(max = actualWidth)
+				.width(actualWidth)
 				.fillMaxHeight(),
 			header = {
 				IconButton(onClick = { onCollapsedChange(!collapsed) }) {
 					Icon(
-						imageVector = if (collapsed) Icons.Default.Menu else Icons.Default.MenuOpen,
-						contentDescription = stringResource(id = R.string.menu_option_more)
+						imageVector = if (collapsed) Icons.Default.Menu else Icons.Filled.MenuOpen,
+						contentDescription = stringResource(
+							id = if (collapsed) R.string.navigation_expand else R.string.navigation_collapse
+						)
 					)
 				}
 			}
@@ -258,7 +259,7 @@ fun Ts18ActionSidebar(
 					onClick = { onAction(Ts18DashboardAction.PERIPHERALS) }
 				)
 				NavigationRailItem(
-					icon = { Icon(Icons.Default.Send, contentDescription = stringResource(R.string.ts18_dashboard_file_share)) },
+					icon = { Icon(Icons.Filled.Send, contentDescription = stringResource(R.string.ts18_dashboard_file_share)) },
 					label = if (!collapsed) { { Text(stringResource(R.string.ts18_dashboard_file_share), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) } } else null,
 					selected = false,
 					onClick = { onAction(Ts18DashboardAction.FILE_SHARING) }
@@ -316,6 +317,37 @@ fun Ts18ActionSidebar(
 	}
 }
 
+
+
+@Composable
+private fun SidebarItem(
+	collapsed: Boolean,
+	icon: ImageVector,
+	labelRes: Int,
+	onClick: () -> Unit,
+) {
+	NavigationRailItem(
+		icon = {
+			Icon(
+				imageVector = icon,
+				contentDescription = stringResource(labelRes)
+			)
+		},
+		label = if (!collapsed) {
+			{
+				Text(
+					text = stringResource(labelRes),
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis
+				)
+			}
+		} else {
+			null
+		},
+		selected = false,
+		onClick = onClick,
+	)
+}
 
 enum class Ts18DashboardAction {
 	PHONE_AUTO,
