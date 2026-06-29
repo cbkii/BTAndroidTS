@@ -53,9 +53,7 @@ class LocalDiagnosticsExporter(
 			}
 		}
 
-	private fun outputDirectory(): File =
-		appContext.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)
-			?: File(appContext.filesDir, "diagnostics")
+	private fun outputDirectory(): File = File(appContext.filesDir, "diagnostics")
 
 	private fun usbDiskTargets(): List<DiagnosticsExportTarget> {
 		val storage = File("/storage")

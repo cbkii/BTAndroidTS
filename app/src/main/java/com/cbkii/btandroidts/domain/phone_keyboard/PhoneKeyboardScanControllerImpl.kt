@@ -35,12 +35,20 @@ class PhoneKeyboardScanControllerImpl(
         }
     }
 
+    private val cacheLock = Any()
+    private val _currentCandidates = LinkedHashMap<String, PhoneKeyboardCandidate>()
+    private val clearTrigger = MutableStateFlow(0L)
+    private var cacheGeneration = 0L
+
     override val candidates: StateFlow<List<PhoneKeyboardCandidate>> = combine(
         inventoryRepository.devices,
         hidHostController.profileStates,
-        tickerFlow
-    ) { unifiedDevices, hidStates, currentTime ->
-        val currentCandidates = _candidatesCache.associateBy { it.address.value }.toMutableMap()
+        tickerFlow,
+        clearTrigger
+    ) { unifiedDevices, hidStates, currentTime, currentClearTrigger ->
+        val (working, initialGeneration) = synchronized(cacheLock) {
+            _currentCandidates.toMutableMap() to cacheGeneration
+        }
 
         for (device in unifiedDevices) {
             val addressStr = device.address.value
@@ -81,8 +89,8 @@ class PhoneKeyboardScanControllerImpl(
                  else -> PhoneKeyboardInputVerificationState.NOT_VERIFIED
             }
 
-            if (currentCandidates.containsKey(addressStr)) {
-                val existing = currentCandidates[addressStr]!!
+            if (working.containsKey(addressStr)) {
+                val existing = working[addressStr]!!
                 val merged = if(isFresh) {
                     PhoneKeyboardPolicy.mergeCandidates(existing, evidence, currentTime)
                 } else {
@@ -94,21 +102,35 @@ class PhoneKeyboardScanControllerImpl(
                    hidProfileState = hidProfileState,
                    inputVerificationState = inputVerificationState
                 )
-                currentCandidates[addressStr] = PhoneKeyboardPolicy.recomputeGuidance(updated)
+                working[addressStr] = PhoneKeyboardPolicy.recomputeGuidance(updated)
             } else if (isFresh) {
-                currentCandidates[addressStr] = PhoneKeyboardPolicy.mapToCandidate(evidence, isBonded, inputVerificationState, hidProfileState)
+                working[addressStr] = PhoneKeyboardPolicy.mapToCandidate(evidence, isBonded, inputVerificationState, hidProfileState)
             }
         }
 
-        val validCandidates = currentCandidates.values
-            .filter { PhoneKeyboardPolicy.shouldRetainCandidate(it, currentTime) }
+        val iterator = working.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (!PhoneKeyboardPolicy.shouldRetainCandidate(entry.value, currentTime)) {
+                iterator.remove()
+            }
+        }
+
+        synchronized(cacheLock) {
+            if (initialGeneration == cacheGeneration) {
+                _currentCandidates.clear()
+                _currentCandidates.putAll(working)
+            } else {
+                // Generation changed during the suspend/combine process (e.g. clearCandidates was called)
+                // Discard stale working calculation and return the current fresh state.
+                return@combine _currentCandidates.values.toList()
+            }
+        }
+
+        working.values
             .sortedByDescending { PhoneKeyboardPolicy.calculateConfidenceScore(it) }
-
-        _candidatesCache = validCandidates
-        validCandidates
+            .toList()
     }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    private var _candidatesCache: List<PhoneKeyboardCandidate> = emptyList()
 
     private val _isScanning = MutableStateFlow(false)
     override val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
@@ -131,6 +153,10 @@ class PhoneKeyboardScanControllerImpl(
     }
 
     override fun clearCandidates() {
-        _candidatesCache = emptyList()
+        synchronized(cacheLock) {
+            cacheGeneration++
+            _currentCandidates.clear()
+        }
+        clearTrigger.value = System.currentTimeMillis()
     }
 }

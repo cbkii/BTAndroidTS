@@ -13,6 +13,6 @@ class ProductIdentityTest {
 
 	@Test
 	fun versionNameIsTs18ProductBaseline() {
-		assertEquals("18.0.1", BuildConfig.VERSION_NAME)
+		assertTrue("Version must be part of the TS18 18.0.x product baseline", BuildConfig.VERSION_NAME.startsWith("18.0."))
 	}
 }

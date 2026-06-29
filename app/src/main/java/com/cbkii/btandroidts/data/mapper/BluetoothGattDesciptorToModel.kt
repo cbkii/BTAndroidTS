@@ -15,11 +15,16 @@ fun BluetoothGattDescriptor.toModel(probableName: String? = null): BLEDescriptor
 		this.probableName = probableName
 	}
 
+// Android API constants for BLE descriptors
+private val ENABLE_INDICATION_VALUE = byteArrayOf(0x02, 0x00)
+private val ENABLE_NOTIFICATION_VALUE = byteArrayOf(0x01, 0x00)
+private val DISABLE_NOTIFICATION_VALUE = byteArrayOf(0x00, 0x00)
+
 val BLEDescriptorModel.descriptorValue: BLEDescriptorValue
 	get() = when {
-		byteArray.contentEquals(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE) -> BLEDescriptorValue.EnableIndication
-		byteArray.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) -> BLEDescriptorValue.EnableNotification
-		byteArray.contentEquals(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE) -> BLEDescriptorValue.DisableNotifyOrIndication
+		byteArray.contentEquals(ENABLE_INDICATION_VALUE) -> BLEDescriptorValue.EnableIndication
+		byteArray.contentEquals(ENABLE_NOTIFICATION_VALUE) -> BLEDescriptorValue.EnableNotification
+		byteArray.contentEquals(DISABLE_NOTIFICATION_VALUE) -> BLEDescriptorValue.DisableNotifyOrIndication
 		else -> BLEDescriptorValue.ReadableValue(valueAsString)
 	}
 
