@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-
 class PhoneKeyboardScanControllerImpl(
     private val inventoryRepository: BluetoothDeviceInventoryRepository,
     private val hidHostController: HidHostController,
@@ -47,7 +46,9 @@ class PhoneKeyboardScanControllerImpl(
         clearTrigger
     ) { unifiedDevices, hidStates, currentTime, currentClearTrigger ->
         val (working, initialGeneration) = synchronized(cacheLock) {
-            _currentCandidates.toMutableMap() to cacheGeneration
+            val map = LinkedHashMap<String, PhoneKeyboardCandidate>(_currentCandidates.size + unifiedDevices.size)
+            map.putAll(_currentCandidates)
+            map to cacheGeneration
         }
 
         for (device in unifiedDevices) {
