@@ -18,6 +18,7 @@ import com.cbkii.btandroidts.presentation.feature_devices.state.BTDevicesScreenE
 import com.cbkii.btandroidts.presentation.feature_devices.state.BTDevicesScreenState
 import com.cbkii.btandroidts.presentation.util.AppViewModel
 import com.cbkii.btandroidts.presentation.util.UiEvents
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,11 +74,12 @@ class BTDeviceViewmodel(
 		inventoryRepository.capabilities,
 		_isPairedDevicesReady,
 	) { inventoryDevices, capabilities, pairedDevicesLoaded ->
-		val paired = mutableListOf<BluetoothDeviceModel>()
-		val available = mutableListOf<BluetoothDeviceModel>()
-		val le = mutableListOf<BluetoothLEDeviceModel>()
+		val paired = persistentListOf<BluetoothDeviceModel>().builder()
+		val available = persistentListOf<BluetoothDeviceModel>().builder()
+		val le = persistentListOf<BluetoothLEDeviceModel>().builder()
 
-		inventoryDevices.forEach { device ->
+		for (i in 0 until inventoryDevices.size) {
+			val device = inventoryDevices[i]
 			if (device.bondState == BondStatus.BONDED) {
 				paired.add(device.toClassicModel())
 			} else if (DeviceTransport.CLASSIC in device.transports) {
@@ -90,10 +92,10 @@ class BTDeviceViewmodel(
 		}
 
 		BTDevicesScreenState(
-			pairedDevices = paired.toPersistentList(),
+			pairedDevices = paired.build(),
 			isPairedDevicesLoaded = pairedDevicesLoaded,
-			availableDevices = available.toPersistentList(),
-			leDevices = le.toPersistentList(),
+			availableDevices = available.build(),
+			leDevices = le.build(),
 			inventoryDevices = inventoryDevices.toPersistentList(),
 			capabilities = capabilities.toPersistentList(),
 		)
