@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-
 class PhoneKeyboardScanControllerImpl(
     private val inventoryRepository: BluetoothDeviceInventoryRepository,
     private val hidHostController: HidHostController,
@@ -46,9 +45,7 @@ class PhoneKeyboardScanControllerImpl(
         tickerFlow,
         clearTrigger
     ) { unifiedDevices, hidStates, currentTime, currentClearTrigger ->
-        val (working, initialGeneration) = synchronized(cacheLock) {
-            _currentCandidates.toMutableMap() to cacheGeneration
-        }
+        val initialGeneration = synchronized(cacheLock) { cacheGeneration }
 
         for (device in unifiedDevices) {
             val addressStr = device.address.value
@@ -89,47 +86,50 @@ class PhoneKeyboardScanControllerImpl(
                  else -> PhoneKeyboardInputVerificationState.NOT_VERIFIED
             }
 
-            if (working.containsKey(addressStr)) {
-                val existing = working[addressStr]!!
-                val merged = if(isFresh) {
-                    PhoneKeyboardPolicy.mergeCandidates(existing, evidence, currentTime)
-                } else {
-                    existing
+            synchronized(cacheLock) {
+                if (initialGeneration != cacheGeneration) {
+                    // Generation changed during the suspend/combine process (e.g. clearCandidates was called)
+                    // Discard stale working calculation and return the current fresh state.
+                    return@combine _currentCandidates.values.toList()
                 }
 
-                val updated = merged.copy(
-                   isBonded = isBonded,
-                   hidProfileState = hidProfileState,
-                   inputVerificationState = inputVerificationState
-                )
-                working[addressStr] = PhoneKeyboardPolicy.recomputeGuidance(updated)
-            } else if (isFresh) {
-                working[addressStr] = PhoneKeyboardPolicy.mapToCandidate(evidence, isBonded, inputVerificationState, hidProfileState)
-            }
-        }
+                if (_currentCandidates.containsKey(addressStr)) {
+                    val existing = _currentCandidates[addressStr]!!
+                    val merged = if(isFresh) {
+                        PhoneKeyboardPolicy.mergeCandidates(existing, evidence, currentTime)
+                    } else {
+                        existing
+                    }
 
-        val iterator = working.iterator()
-        while (iterator.hasNext()) {
-            val entry = iterator.next()
-            if (!PhoneKeyboardPolicy.shouldRetainCandidate(entry.value, currentTime)) {
-                iterator.remove()
+                    val updated = merged.copy(
+                       isBonded = isBonded,
+                       hidProfileState = hidProfileState,
+                       inputVerificationState = inputVerificationState
+                    )
+                    _currentCandidates[addressStr] = PhoneKeyboardPolicy.recomputeGuidance(updated)
+                } else if (isFresh) {
+                    _currentCandidates[addressStr] = PhoneKeyboardPolicy.mapToCandidate(evidence, isBonded, inputVerificationState, hidProfileState)
+                }
             }
         }
 
         synchronized(cacheLock) {
-            if (initialGeneration == cacheGeneration) {
-                _currentCandidates.clear()
-                _currentCandidates.putAll(working)
-            } else {
-                // Generation changed during the suspend/combine process (e.g. clearCandidates was called)
-                // Discard stale working calculation and return the current fresh state.
+            if (initialGeneration != cacheGeneration) {
                 return@combine _currentCandidates.values.toList()
             }
-        }
 
-        working.values
-            .sortedByDescending { PhoneKeyboardPolicy.calculateConfidenceScore(it) }
-            .toList()
+            val iterator = _currentCandidates.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next()
+                if (!PhoneKeyboardPolicy.shouldRetainCandidate(entry.value, currentTime)) {
+                    iterator.remove()
+                }
+            }
+
+            return@combine _currentCandidates.values
+                .sortedByDescending { PhoneKeyboardPolicy.calculateConfidenceScore(it) }
+                .toList()
+        }
     }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _isScanning = MutableStateFlow(false)
