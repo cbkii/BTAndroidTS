@@ -23,11 +23,10 @@ import java.util.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
-import com.cbkii.btandroidts.domain.peripheral.OppShareRequest
-import com.cbkii.btandroidts.domain.peripheral.OppShareItem
-import com.cbkii.btandroidts.domain.peripheral.FileTransferController
-import org.koin.compose.koinInject
+import androidx.compose.ui.res.stringResource
+import com.cbkii.btandroidts.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -36,27 +35,28 @@ fun OppHistoryScreen(
     navigator: DestinationsNavigator
 ) {
     val viewModel = koinViewModel<OppHistoryViewModel>()
-    val transferController = koinInject<FileTransferController>()
     val state by viewModel.state.collectAsState()
     val dateFormat = remember { DateFormat.getDateTimeInstance() }
     val context = LocalContext.current
-    val errorMsgTemplate = androidx.compose.ui.res.stringResource(com.cbkii.btandroidts.R.string.error_opp_transfer_failed)
+    val errorMsgTemplate = stringResource(R.string.error_opp_transfer_failed)
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
-            val mimeType = context.contentResolver.getType(it) ?: "*/*"
-            val request = OppShareRequest(items = listOf(OppShareItem(uri = it, text = null, mimeType = mimeType)), mimeType = mimeType)
-            transferController.delegateToStockOpp(context, request, null).onFailure { err ->
-                val errorMsg = String.format(errorMsgTemplate, err.message ?: "Unknown error")
-                android.widget.Toast.makeText(context, errorMsg, android.widget.Toast.LENGTH_SHORT).show()
-            }
+            viewModel.sendFile(it)
+                .onSuccess {
+                    Toast.makeText(context, "OPP transfer delegated successfully", Toast.LENGTH_SHORT).show()
+                }
+                .onFailure { err ->
+                    val errorMsg = String.format(errorMsgTemplate, err.message ?: "Unknown error")
+                    Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                }
         }
     }
 
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = { launcher.launch("*/*") }) {
-                Text(androidx.compose.ui.res.stringResource(com.cbkii.btandroidts.R.string.action_send_file))
+                Text(stringResource(R.string.action_send_file))
             }
         },
         topBar = {

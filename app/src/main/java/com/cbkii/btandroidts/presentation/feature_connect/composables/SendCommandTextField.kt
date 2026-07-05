@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -85,8 +86,6 @@ fun SendCommandTextField(
 							hint = currentHint
 							imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
 							inputType = android.text.InputType.TYPE_CLASS_TEXT
-							setMaxLines(maxLines)
-							setTextColor(color.toArgb())
 							addTextChangedListener(object : android.text.TextWatcher {
 								override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
 								override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -110,7 +109,11 @@ fun SendCommandTextField(
 							view.setSelection(value.length)
 						}
 						view.isEnabled = isEnable
-						view.textSize = textStyle.fontSize.value
+						view.setMaxLines(maxLines)
+						view.setTextColor(color.toArgb())
+						if (textStyle.fontSize.type == TextUnitType.Sp) {
+							view.textSize = textStyle.fontSize.value
+						}
 					},
 					modifier = Modifier.fillMaxWidth()
 				)

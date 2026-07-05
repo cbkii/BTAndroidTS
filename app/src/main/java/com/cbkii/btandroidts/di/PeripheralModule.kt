@@ -30,7 +30,10 @@ import com.cbkii.btandroidts.domain.peripheral.TopwayLaneAdapter
 import com.cbkii.btandroidts.domain.peripheral.TopwayLaneGuard
 import com.cbkii.btandroidts.domain.peripheral.Ts18DiagnosticsCollector
 import com.cbkii.btandroidts.domain.peripheral.UnifiedBluetoothInventoryMerger
+import com.cbkii.btandroidts.data.opp.AndroidOppShareDelegate
+import com.cbkii.btandroidts.domain.peripheral.OppShareDelegate
 import com.cbkii.btandroidts.domain.peripheral.VendorPackageInspector
+import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -53,4 +56,5 @@ val peripheralModule = module {
 	singleOf(::LocalDiagnosticsExporter) bind DiagnosticsExporter::class
 	singleOf(::InMemoryOutgoingTransferStore) bind OutgoingTransferStore::class
 	singleOf(::AndroidFileTransferController) bind FileTransferController::class
+	single { AndroidOppShareDelegate(androidContext(), get()) } bind OppShareDelegate::class
 }
