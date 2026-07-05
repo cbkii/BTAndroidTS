@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -67,6 +68,10 @@ fun SendCommandTextField(
 		label = "Icon button colors"
 	)
 
+	val currentOnChange by rememberUpdatedState(onChange)
+	val currentOnImeAction by rememberUpdatedState(onImeAction)
+	val currentHint = stringResource(id = R.string.text_field_placeholder)
+
 	Row(
 		verticalAlignment = Alignment.CenterVertically,
 		modifier = modifier
@@ -85,17 +90,19 @@ fun SendCommandTextField(
 						android.widget.EditText(ctx).apply {
 							setText(value)
 							background = null
-							hint = "Send command..."
+							hint = currentHint
+							imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
+							inputType = android.text.InputType.TYPE_CLASS_TEXT
 							addTextChangedListener(object : android.text.TextWatcher {
 								override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
 								override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
 								override fun afterTextChanged(s: android.text.Editable?) {
-									onChange(s?.toString() ?: "")
+									currentOnChange(s?.toString() ?: "")
 								}
 							})
 							setOnEditorActionListener { _, actionId, _ ->
 								if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
-									onImeAction()
+									currentOnImeAction()
 									true
 								} else {
 									false

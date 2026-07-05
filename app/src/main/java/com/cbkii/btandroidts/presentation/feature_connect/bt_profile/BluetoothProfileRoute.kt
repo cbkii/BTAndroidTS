@@ -102,7 +102,7 @@ fun BluetoothProfileRoute(
 						shape = MaterialTheme.shapes.large,
 						containerColor = MaterialTheme.colorScheme.secondaryContainer
 					) {
-						Text(text = "Try all supported methods")
+						Text(text = stringResource(id = R.string.action_try_all_methods))
 					}
 				}
 				AnimatedVisibility(

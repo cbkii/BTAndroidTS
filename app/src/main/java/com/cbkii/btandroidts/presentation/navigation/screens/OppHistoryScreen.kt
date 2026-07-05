@@ -40,8 +40,11 @@ fun OppHistoryScreen(
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
-            val request = OppShareRequest(items = listOf(OppShareItem(uri = it, text = null, mimeType = null)), mimeType = "*/*")
-            viewModel.send(context, request)
+            val mimeType = context.contentResolver.getType(it) ?: "*/*"
+            val request = OppShareRequest(items = listOf(OppShareItem(uri = it, text = null, mimeType = mimeType)), mimeType = mimeType)
+            viewModel.send(context, request).onFailure { err ->
+                android.widget.Toast.makeText(context, "OPP transfer failed: ${err.message}", android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

@@ -8,56 +8,33 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.cbkii.btandroidts.domain.peripheral.BluetoothDeviceInventoryRepository
-import com.cbkii.btandroidts.domain.peripheral.BondStatus
-import com.cbkii.btandroidts.domain.peripheral.UnifiedBluetoothDevice
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.presentation.navigation.args.PeripheralDetailArgs
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.PeripheralDetailScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import org.koin.androidx.compose.koinViewModel
-
-data class PeripheralManagerState(
-    val pairedDevices: List<UnifiedBluetoothDevice> = emptyList()
-)
-
-class PeripheralManagerViewModel(
-    inventoryRepository: BluetoothDeviceInventoryRepository
-) : ViewModel() {
-    val state: StateFlow<PeripheralManagerState> = inventoryRepository.devices
-        .map { devices ->
-            PeripheralManagerState(
-                pairedDevices = devices.filter { it.bondState == BondStatus.BONDED }
-            )
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PeripheralManagerState())
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
 @Composable
 fun PeripheralManagerScreen(navigator: DestinationsNavigator) {
     val viewModel = koinViewModel<PeripheralManagerViewModel>()
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Paired Peripherals") },
+                title = { Text(stringResource(R.string.ts18_dashboard_peripherals)) },
                 navigationIcon = {
                     IconButton(onClick = { navigator.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Default.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = stringResource(id = R.string.back_arrow))
                     }
                 }
             )
@@ -74,12 +51,12 @@ fun PeripheralManagerScreen(navigator: DestinationsNavigator) {
         ) {
             item {
                 Text(
-                    text = "Select a bonded peripheral to manage connection, testing, and policy.",
+                    text = stringResource(R.string.peripheral_detail_title),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
-            items(state.pairedDevices) { device ->
+            items(state.pairedDevices, key = { it.address.value }) { device ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

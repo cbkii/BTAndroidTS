@@ -1,8 +1,8 @@
 # TS18 Validation Matrix
 
-| Area | Component | Expected Status | Validation Required |
+| Area | Component | Status | Target |
 | :--- | :--- | :--- | :--- |
-| File Transfer | File Picker | Opens native file explorer | Yes |
-| File Transfer | OPP Execution | Transfers file to paired device via stock BT | Yes |
-| Peripheral | HID Discovery | Identifies keyboards correctly | Yes |
-| Input | AndroidView Text | Takes focus and captures keystrokes natively | Yes |
+| File Transfer | File Picker | Requires device validation | TS18 physical hardware |
+| File Transfer | OPP Execution | Requires device validation | TS18 physical hardware |
+| Peripheral | HID Discovery | Requires device validation | TS18 physical hardware |
+| Input | AndroidView Text | Requires device validation | TS18 physical hardware |

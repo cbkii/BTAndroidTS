@@ -52,7 +52,7 @@ class BluetoothProfileViewModel(
 	override val uiEvents: SharedFlow<UiEvents>
 		get() = _uiEvents.asSharedFlow()
 
-	private val _navEvents = MutableSharedFlow<ProfileNavigationEvent>()
+	private val _navEvents = MutableSharedFlow<ProfileNavigationEvent>(extraBufferCapacity = 1, onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
 	val navEvents = _navEvents.asSharedFlow()
 
 	private val device: BluetoothDeviceArgs?
@@ -72,7 +72,10 @@ class BluetoothProfileViewModel(
 			com.cbkii.btandroidts.domain.bluetooth.ConnectionRouteStrategy.HID_HOST -> ProfileNavigationEvent.NavigateToHID
 			com.cbkii.btandroidts.domain.bluetooth.ConnectionRouteStrategy.OPP_FILE_TRANSFER -> ProfileNavigationEvent.NavigateToOPP
 			com.cbkii.btandroidts.domain.bluetooth.ConnectionRouteStrategy.RFCOMM_TERMINAL -> ProfileNavigationEvent.NavigateToRFCOMM(uuid)
-			else -> ProfileNavigationEvent.NavigateToRFCOMM(uuid)
+			else -> {
+				_uiEvents.emit(UiEvents.ShowSnackBar("Unsupported profile routing for UUID $uuid"))
+				return@launch
+			}
 		}
 		_navEvents.emit(event)
 	}
@@ -80,6 +83,7 @@ class BluetoothProfileViewModel(
 	fun onTryAllMethods() = viewModelScope.launch {
 		val bestUuid = ConnectionOrchestrator.getBestMethod(_profile.value.deviceUUIDS)
 		bestUuid?.let { onConnectSelected(it) }
+			?: _uiEvents.emit(UiEvents.ShowSnackBar("No supported automatic connection methods found"))
 	}
 
 	private fun loadDeviceUUIDs() = viewModelScope.launch {

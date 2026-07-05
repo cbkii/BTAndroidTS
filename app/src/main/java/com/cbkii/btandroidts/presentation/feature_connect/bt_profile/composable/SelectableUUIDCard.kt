@@ -34,23 +34,9 @@ fun SelectableUUIDCard(
 	fontFamily: FontFamily = FontFamily.Monospace,
 ) {
 
-	val uuidName by remember(uuid, uniqueName) {
-		derivedStateOf {
-			val shortUuid = String.format("%04X", (uuid.mostSignificantBits ushr 32) and 0xFFFF)
-			val type = when (shortUuid) {
-				"1101" -> "Serial terminal (RFCOMM/SPP)"
-				"1124", "112D" -> "Keyboard / mouse / controller (HID)"
-				"1105", "1106" -> "File transfer (OPP)"
-				"110A" -> "Audio Source (A2DP)"
-				"110B" -> "Audio Sink (A2DP)"
-				"111E" -> "Handsfree (HFP)"
-				"112F" -> "Phonebook Access (PBAP)"
-				"0000" -> if (uuid.toString() == "3fe6c764-029f-48f0-a2d0-a43d9b1df5c8") "BTAndroidTS Internal" else "Custom/Unknown"
-				else -> "Custom/Unknown"
-			}
-			uniqueName ?: "$type\n$uuid"
-		}
-	}
+	val uuidNameStrRes = remember(uuid) { com.cbkii.btandroidts.domain.bluetooth.ConnectionOrchestrator.getHumanReadableNameRes(uuid) }
+	val uuidNameStr = androidx.compose.ui.res.stringResource(id = uuidNameStrRes)
+	val displayStr = uniqueName ?: "$uuidNameStr\n$uuid"
 
 	Row(
 		modifier = modifier
@@ -67,7 +53,7 @@ fun SelectableUUIDCard(
 				.colors(selectedColor = MaterialTheme.colorScheme.secondary)
 		)
 		Text(
-			text = uuidName,
+			text = displayStr,
 			style = MaterialTheme.typography.labelLarge,
 			fontFamily = fontFamily,
 			color = MaterialTheme.colorScheme.onSurface,
