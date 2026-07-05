@@ -57,6 +57,7 @@ fun BluetoothProfileRoute(
 	state: BTProfileScreenState,
 	onEvent: (BTProfileEvents) -> Unit,
 	onConnect: (UUID) -> Unit,
+	onTryAll: () -> Unit = {},
 	modifier: Modifier = Modifier,
 	navigation: @Composable () -> Unit = {},
 ) {
@@ -87,24 +88,42 @@ fun BluetoothProfileRoute(
 			)
 		},
 		floatingActionButton = {
-			AnimatedVisibility(
-				visible = showConnectButton || isInspectionMode,
-				enter = slideInVertically() + fadeIn(),
-				exit = slideOutVertically() + fadeOut()
+			androidx.compose.foundation.layout.Column(
+				horizontalAlignment = androidx.compose.ui.Alignment.End,
+				verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
 			) {
-				ExtendedFloatingActionButton(
-					onClick = { selectedUUID?.let(onConnect) },
-					shape = MaterialTheme.shapes.large,
-					modifier = Modifier.sharedBoundsWrapper(
-						SharedElementTransitionKeys.btClientScreen(address)
-					)
+				AnimatedVisibility(
+					visible = !state.isDiscovering && state.deviceUUIDS.isNotEmpty(),
+					enter = slideInVertically() + fadeIn(),
+					exit = slideOutVertically() + fadeOut()
 				) {
-					Icon(
-						painter = painterResource(R.drawable.ic_connect_variant),
-						contentDescription = "Connect"
-					)
-					Spacer(modifier = Modifier.widthIn(4.dp))
-					Text(text = stringResource(id = R.string.dialog_action_connect))
+					ExtendedFloatingActionButton(
+						onClick = onTryAll,
+						shape = MaterialTheme.shapes.large,
+						containerColor = MaterialTheme.colorScheme.secondaryContainer
+					) {
+						Text(text = stringResource(id = R.string.action_try_all_methods))
+					}
+				}
+				AnimatedVisibility(
+					visible = showConnectButton || isInspectionMode,
+					enter = slideInVertically() + fadeIn(),
+					exit = slideOutVertically() + fadeOut()
+				) {
+					ExtendedFloatingActionButton(
+						onClick = { selectedUUID?.let(onConnect) },
+						shape = MaterialTheme.shapes.large,
+						modifier = Modifier.sharedBoundsWrapper(
+							SharedElementTransitionKeys.btClientScreen(address)
+						)
+					) {
+						Icon(
+							painter = painterResource(R.drawable.ic_connect_variant),
+							contentDescription = "Connect"
+						)
+						Spacer(modifier = Modifier.widthIn(4.dp))
+						Text(text = stringResource(id = R.string.dialog_action_connect))
+					}
 				}
 			}
 		},

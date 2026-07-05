@@ -34,9 +34,9 @@ fun SelectableUUIDCard(
 	fontFamily: FontFamily = FontFamily.Monospace,
 ) {
 
-	val uuidName by remember(uuid, uniqueName) {
-		derivedStateOf { uniqueName ?: "$uuid" }
-	}
+	val uuidNameStrRes = remember(uuid) { com.cbkii.btandroidts.domain.bluetooth.ConnectionOrchestrator.getHumanReadableNameRes(uuid) }
+	val uuidNameStr = androidx.compose.ui.res.stringResource(id = uuidNameStrRes)
+	val displayStr = uniqueName ?: "$uuidNameStr\n$uuid"
 
 	Row(
 		modifier = modifier
@@ -53,7 +53,7 @@ fun SelectableUUIDCard(
 				.colors(selectedColor = MaterialTheme.colorScheme.secondary)
 		)
 		Text(
-			text = uuidName,
+			text = displayStr,
 			style = MaterialTheme.typography.labelLarge,
 			fontFamily = fontFamily,
 			color = MaterialTheme.colorScheme.onSurface,

@@ -70,7 +70,15 @@ class AndroidFileTransferController(
 	private fun OppShareRequest.toStockOppIntent(): Intent {
 		val streamUris = items.mapNotNull { it.uri }
 		val text = items.firstNotNullOfOrNull { it.text }
-		val type = mimeType ?: items.firstNotNullOfOrNull { it.mimeType } ?: "*/*"
+
+		var type = mimeType
+		if (type == null || type == "*/*") {
+			type = items.firstNotNullOfOrNull { it.mimeType }
+		}
+		if (type == null) {
+			type = "*/*"
+		}
+
 		return when {
 			streamUris.size > 1 -> Intent(Intent.ACTION_SEND_MULTIPLE).apply {
 				setPackage(STOCK_BLUETOOTH_PACKAGE)

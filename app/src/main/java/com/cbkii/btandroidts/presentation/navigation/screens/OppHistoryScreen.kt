@@ -18,8 +18,16 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 import java.text.DateFormat
 import java.util.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import com.cbkii.btandroidts.domain.peripheral.OppShareRequest
+import com.cbkii.btandroidts.domain.peripheral.OppShareItem
+import com.cbkii.btandroidts.domain.peripheral.FileTransferController
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -28,10 +36,36 @@ fun OppHistoryScreen(
     navigator: DestinationsNavigator
 ) {
     val viewModel = koinViewModel<OppHistoryViewModel>()
+    val transferController = koinInject<FileTransferController>()
     val state by viewModel.state.collectAsState()
     val dateFormat = remember { DateFormat.getDateTimeInstance() }
+    val context = LocalContext.current
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            val resolvedMimeType = context.contentResolver.getType(it)
+            val request = OppShareRequest(
+                items = listOf(OppShareItem(uri = it, mimeType = resolvedMimeType)),
+                mimeType = resolvedMimeType
+            )
+            transferController.delegateToStockOpp(context, request, null)
+                .onSuccess {
+                    val msg = context.getString(com.cbkii.btandroidts.R.string.opp_sender_success)
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                }
+                .onFailure { err ->
+                    val msg = context.getString(com.cbkii.btandroidts.R.string.opp_sender_failed, err.message)
+                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
 
     Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = { launcher.launch("*/*") }) {
+                Text("Send File")
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Transfer History") },

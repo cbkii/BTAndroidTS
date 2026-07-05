@@ -23,6 +23,10 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.BtProfileDestination
 import com.ramcosta.composedestinations.generated.destinations.ClientRouteDestination
+import com.ramcosta.composedestinations.generated.destinations.PeripheralDetailScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.OppHistoryScreenDestination
+import com.cbkii.btandroidts.presentation.navigation.args.PeripheralDetailArgs
+import com.cbkii.btandroidts.presentation.feature_connect.bt_profile.ProfileNavigationEvent
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
 import kotlin.uuid.toKotlinUuid
@@ -46,23 +50,39 @@ fun AnimatedVisibilityScope.BTDeviceProfileScreen(
 		onPopBack = dropUnlessResumed { navigator.popBackStack() }
 	)
 
+	androidx.compose.runtime.LaunchedEffect(viewmodel.navEvents) {
+		viewmodel.navEvents.collect { event ->
+			when (event) {
+				ProfileNavigationEvent.NavigateToHID -> {
+					val pArgs = PeripheralDetailArgs(args.address, args.name ?: "Unknown")
+					navigator.navigate(PeripheralDetailScreenDestination(pArgs)) {
+						popUpTo(BtProfileDestination) { inclusive = true }
+					}
+				}
+				ProfileNavigationEvent.NavigateToOPP -> {
+					navigator.navigate(OppHistoryScreenDestination) {
+						popUpTo(BtProfileDestination) { inclusive = true }
+					}
+				}
+				is ProfileNavigationEvent.NavigateToRFCOMM -> {
+					navigator.navigate(ClientRouteDestination(address = args.address, uuid = event.uuid.toKotlinUuid())) {
+						popUpTo(BtProfileDestination) { inclusive = true }
+					}
+				}
+				else -> {}
+			}
+		}
+	}
+
 	CompositionLocalProvider(LocalSharedTransitionVisibilityScopeProvider provides this) {
 		BluetoothProfileRoute(
 			address = args.address,
 			state = profile,
 			onEvent = viewmodel::onEvent,
 			onConnect = { uuid ->
-				navigator.navigate(
-					direction = ClientRouteDestination(
-						address = args.address,
-						uuid = uuid.toKotlinUuid()
-					),
-				) {
-					popUpTo(BtProfileDestination) {
-						inclusive = true
-					}
-				}
+				viewmodel.onConnectSelected(uuid)
 			},
+			onTryAll = { viewmodel.onTryAllMethods() },
 			navigation = {
 				IconButton(onClick = dropUnlessResumed(block = navigator::popBackStack)) {
 					Icon(

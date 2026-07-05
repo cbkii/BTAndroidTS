@@ -19,8 +19,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -45,10 +47,7 @@ fun SendCommandTextField(
 	modifier: Modifier = Modifier,
 	isEnable: Boolean = true,
 	onImeAction: () -> Unit = {},
-	maxLines: Int = 2,
 	shape: Shape = MaterialTheme.shapes.large,
-	cursorColor: Brush = SolidColor(MaterialTheme.colorScheme.primary),
-	textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
 	color: Color = MaterialTheme.colorScheme.onSurface
 ) {
 	val interaction = remember { MutableInteractionSource() }
@@ -66,62 +65,71 @@ fun SendCommandTextField(
 		label = "Icon button colors"
 	)
 
-	BasicTextField(
-		value = value,
-		onValueChange = onChange,
-		decorationBox = { content ->
-			Row(
-				verticalAlignment = Alignment.CenterVertically
-			) {
-				Surface(
-					color = surfaceColor,
-					shape = shape,
-					contentColor = color,
-					modifier = Modifier.weight(1f),
-				) {
-					Box(
-						modifier = Modifier.padding(all = 16.dp),
-					) {
-						when {
-							value.isBlank() ->
-								Text(
-									text = stringResource(id = R.string.text_field_placeholder),
-									style = MaterialTheme.typography.labelLarge,
-									color = MaterialTheme.colorScheme.onSurfaceVariant
-										.copy(alpha = .5f)
-								)
+	val currentOnChange by rememberUpdatedState(onChange)
+	val currentOnImeAction by rememberUpdatedState(onImeAction)
+	val currentHint = stringResource(id = R.string.send_command_hint)
 
-							else -> content()
+	Row(
+		verticalAlignment = Alignment.CenterVertically,
+		modifier = modifier
+	) {
+		Surface(
+			color = surfaceColor,
+			shape = shape,
+			contentColor = color,
+			modifier = Modifier.weight(1f),
+		) {
+			Box(
+				modifier = Modifier.padding(all = 16.dp),
+			) {
+				androidx.compose.ui.viewinterop.AndroidView(
+					factory = { ctx ->
+						android.widget.EditText(ctx).apply {
+							setText(value)
+							background = null
+							hint = currentHint
+							imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
+							inputType = android.text.InputType.TYPE_CLASS_TEXT
+							addTextChangedListener(object : android.text.TextWatcher {
+								override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+								override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+								override fun afterTextChanged(s: android.text.Editable?) {
+									currentOnChange(s?.toString() ?: "")
+								}
+							})
+							setOnEditorActionListener { _, actionId, _ ->
+								if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+									currentOnImeAction()
+									true
+								} else {
+									false
+								}
+							}
 						}
-					}
-				}
-				IconButton(
-					onClick = onImeAction,
-					enabled = isEnable,
-					colors = IconButtonDefaults
-						.filledIconButtonColors(containerColor = iconButtonColor)
-				) {
-					Icon(
-						painter = painterResource(id = R.drawable.ic_send),
-						contentDescription = stringResource(id = R.string.dialog_action_send),
-					)
-				}
+					},
+					update = { view ->
+						if (view.text.toString() != value) {
+							view.setText(value)
+							view.setSelection(value.length)
+						}
+						view.isEnabled = isEnable
+					},
+					modifier = Modifier.fillMaxWidth()
+				)
 			}
-		},
-		enabled = isEnable,
-		textStyle = textStyle.copy(color = color),
-		cursorBrush = cursorColor,
-		keyboardActions = KeyboardActions(onSend = { onImeAction() }),
-		keyboardOptions = KeyboardOptions(
-			capitalization = KeyboardCapitalization.None,
-			autoCorrectEnabled = false,
-			keyboardType = KeyboardType.Text,
-			imeAction = ImeAction.Send
-		),
-		maxLines = maxLines,
-		interactionSource = interaction,
-		modifier = modifier.focusable(enabled = true)
-	)
+		}
+		IconButton(
+			onClick = onImeAction,
+			enabled = isEnable,
+			colors = IconButtonDefaults
+				.filledIconButtonColors(containerColor = iconButtonColor)
+		) {
+			Icon(
+				painter = painterResource(id = R.drawable.ic_send),
+				contentDescription = stringResource(id = R.string.dialog_action_send),
+			)
+		}
+	}
 }
 
 private class TextValuePreviewParams :
