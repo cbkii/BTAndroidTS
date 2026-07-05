@@ -40,13 +40,14 @@ fun OppHistoryScreen(
     val state by viewModel.state.collectAsState()
     val dateFormat = remember { DateFormat.getDateTimeInstance() }
     val context = LocalContext.current
+    val errorMsgTemplate = androidx.compose.ui.res.stringResource(com.cbkii.btandroidts.R.string.error_opp_transfer_failed)
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
             val mimeType = context.contentResolver.getType(it) ?: "*/*"
             val request = OppShareRequest(items = listOf(OppShareItem(uri = it, text = null, mimeType = mimeType)), mimeType = mimeType)
             transferController.delegateToStockOpp(context, request, null).onFailure { err ->
-                val errorMsg = context.getString(com.cbkii.btandroidts.R.string.error_opp_transfer_failed, err.message)
+                val errorMsg = String.format(errorMsgTemplate, err.message ?: "Unknown error")
                 android.widget.Toast.makeText(context, errorMsg, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
