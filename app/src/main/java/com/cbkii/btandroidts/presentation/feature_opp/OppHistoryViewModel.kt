@@ -26,7 +26,7 @@ class OppHistoryViewModel(
 
     fun retry(id: String) { }
 
-    fun sendFile(uri: Uri): Result<OppTransferHistoryItem> {
+    suspend fun sendFile(uri: Uri): Result<com.cbkii.btandroidts.domain.peripheral.OppTransferHistoryItem> {
         return oppShareDelegate.sendFile(uri)
     }
 

@@ -286,5 +286,6 @@
   <string name="transports_label">Transports: %s</string>
 
   <string name="error_opp_transfer_failed">OPP transfer failed: %s</string>
+  <string name="opp_transfer_success_toast">OPP transfer delegated successfully</string>
 
 </resources>

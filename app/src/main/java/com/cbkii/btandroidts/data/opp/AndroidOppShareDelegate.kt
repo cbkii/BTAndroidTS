@@ -11,12 +11,12 @@ class AndroidOppShareDelegate(
     private val context: Context,
     private val transferController: FileTransferController
 ) : OppShareDelegate {
-    override fun sendFile(uri: Uri): Result<OppTransferHistoryItem> {
+    override suspend fun sendFile(uri: Uri): Result<OppTransferHistoryItem> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val mimeType = context.contentResolver.getType(uri) ?: "*/*"
         val request = OppShareRequest(
             items = listOf(OppShareItem(uri = uri, text = null, mimeType = mimeType)),
             mimeType = mimeType
         )
-        return transferController.delegateToStockOpp(context, request, null)
+        transferController.delegateToStockOpp(context, request, null)
     }
 }

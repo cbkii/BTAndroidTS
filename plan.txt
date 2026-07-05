@@ -1,0 +1,105 @@
+1. Handle delegateToStockOpp outcomes in OppHistoryScreen:
+   - Edit `app/src/main/java/com/cbkii/btandroidts/presentation/navigation/screens/OppHistoryScreen.kt` using `replace_with_git_merge_diff`:
+     ```kotlin
+     <<<<<<< SEARCH
+     import androidx.compose.runtime.remember
+     =======
+     import androidx.compose.runtime.remember
+     import androidx.compose.runtime.rememberCoroutineScope
+     import kotlinx.coroutines.launch
+     >>>>>>> REPLACE
+     ```
+     ```kotlin
+     <<<<<<< SEARCH
+         val errorMsgTemplate = stringResource(R.string.error_opp_transfer_failed)
+
+         val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+             uri?.let {
+                 viewModel.sendFile(it)
+                     .onSuccess {
+                         Toast.makeText(context, "OPP transfer delegated successfully", Toast.LENGTH_SHORT).show()
+                     }
+                     .onFailure { err ->
+                         val errorMsg = String.format(errorMsgTemplate, err.message ?: "Unknown error")
+                         Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                     }
+             }
+         }
+     =======
+         val errorMsgTemplate = stringResource(R.string.error_opp_transfer_failed)
+         val successMsg = stringResource(R.string.opp_transfer_success_toast)
+         val coroutineScope = rememberCoroutineScope()
+
+         val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+             uri?.let {
+                 coroutineScope.launch {
+                     viewModel.sendFile(it)
+                         .onSuccess {
+                             Toast.makeText(context, successMsg, Toast.LENGTH_SHORT).show()
+                         }
+                         .onFailure { err ->
+                             val errorMsg = String.format(errorMsgTemplate, err.message ?: "Unknown error")
+                             Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                         }
+                 }
+             }
+         }
+     >>>>>>> REPLACE
+     ```
+
+2. Suspend `OppShareDelegate` operations:
+   - Edit `app/src/main/java/com/cbkii/btandroidts/domain/peripheral/OppShareDelegate.kt` using `replace_with_git_merge_diff`:
+     ```kotlin
+     <<<<<<< SEARCH
+     interface OppShareDelegate {
+         fun sendFile(uri: Uri): Result<OppTransferHistoryItem>
+     }
+     =======
+     interface OppShareDelegate {
+         suspend fun sendFile(uri: Uri): Result<OppTransferHistoryItem>
+     }
+     >>>>>>> REPLACE
+     ```
+   - Edit `app/src/main/java/com/cbkii/btandroidts/data/opp/AndroidOppShareDelegate.kt` using `replace_with_git_merge_diff`:
+     ```kotlin
+     <<<<<<< SEARCH
+         override fun sendFile(uri: Uri): Result<OppTransferHistoryItem> {
+             val mimeType = context.contentResolver.getType(uri) ?: "*/*"
+             val request = OppShareRequest(
+                 items = listOf(OppShareItem(uri = uri, text = null, mimeType = mimeType)),
+                 mimeType = mimeType
+             )
+             return transferController.delegateToStockOpp(context, request, null)
+         }
+     =======
+         override suspend fun sendFile(uri: Uri): Result<OppTransferHistoryItem> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+             val mimeType = context.contentResolver.getType(uri) ?: "*/*"
+             val request = OppShareRequest(
+                 items = listOf(OppShareItem(uri = uri, text = null, mimeType = mimeType)),
+                 mimeType = mimeType
+             )
+             transferController.delegateToStockOpp(context, request, null)
+         }
+     >>>>>>> REPLACE
+     ```
+   - Edit `app/src/main/java/com/cbkii/btandroidts/presentation/feature_opp/OppHistoryViewModel.kt` using `replace_with_git_merge_diff`:
+     ```kotlin
+     <<<<<<< SEARCH
+         fun sendFile(uri: Uri): Result<OppTransferHistoryItem> {
+             return oppShareDelegate.sendFile(uri)
+         }
+     =======
+         suspend fun sendFile(uri: Uri): Result<OppTransferHistoryItem> {
+             return oppShareDelegate.sendFile(uri)
+         }
+     >>>>>>> REPLACE
+     ```
+
+3. Verify tests pass:
+   - Run `./gradlew testStandardDebugUnitTest` in `run_in_bash_session` to verify the codebase compiles and tests succeed.
+
+4. Pre commit steps:
+   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+
+5. Final Submit:
+   - Submit the PR branch update.

@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.domain.peripheral.OppTransferState
@@ -39,17 +41,21 @@ fun OppHistoryScreen(
     val dateFormat = remember { DateFormat.getDateTimeInstance() }
     val context = LocalContext.current
     val errorMsgTemplate = stringResource(R.string.error_opp_transfer_failed)
+    val successMsg = stringResource(R.string.opp_transfer_success_toast)
+    val coroutineScope = rememberCoroutineScope()
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
-            viewModel.sendFile(it)
-                .onSuccess {
-                    Toast.makeText(context, "OPP transfer delegated successfully", Toast.LENGTH_SHORT).show()
-                }
-                .onFailure { err ->
-                    val errorMsg = String.format(errorMsgTemplate, err.message ?: "Unknown error")
-                    Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
-                }
+            coroutineScope.launch {
+                viewModel.sendFile(it)
+                    .onSuccess {
+                        Toast.makeText(context, successMsg, Toast.LENGTH_SHORT).show()
+                    }
+                    .onFailure { err ->
+                        val errorMsg = String.format(errorMsgTemplate, err.message ?: "Unknown error")
+                        Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                    }
+            }
         }
     }
 
