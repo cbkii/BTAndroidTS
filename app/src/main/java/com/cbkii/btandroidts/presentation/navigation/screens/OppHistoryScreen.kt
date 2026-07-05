@@ -26,6 +26,8 @@ import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import com.cbkii.btandroidts.domain.peripheral.OppShareRequest
 import com.cbkii.btandroidts.domain.peripheral.OppShareItem
+import com.cbkii.btandroidts.domain.peripheral.FileTransferController
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -34,6 +36,7 @@ fun OppHistoryScreen(
     navigator: DestinationsNavigator
 ) {
     val viewModel = koinViewModel<OppHistoryViewModel>()
+    val transferController = koinInject<FileTransferController>()
     val state by viewModel.state.collectAsState()
     val dateFormat = remember { DateFormat.getDateTimeInstance() }
     val context = LocalContext.current
@@ -42,8 +45,9 @@ fun OppHistoryScreen(
         uri?.let {
             val mimeType = context.contentResolver.getType(it) ?: "*/*"
             val request = OppShareRequest(items = listOf(OppShareItem(uri = it, text = null, mimeType = mimeType)), mimeType = mimeType)
-            viewModel.send(context, request).onFailure { err ->
-                android.widget.Toast.makeText(context, "OPP transfer failed: ${err.message}", android.widget.Toast.LENGTH_SHORT).show()
+            transferController.delegateToStockOpp(context, request, null).onFailure { err ->
+                val errorMsg = context.getString(com.cbkii.btandroidts.R.string.error_opp_transfer_failed, err.message)
+                android.widget.Toast.makeText(context, errorMsg, android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -51,7 +55,7 @@ fun OppHistoryScreen(
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(onClick = { launcher.launch("*/*") }) {
-                Text("Send File")
+                Text(androidx.compose.ui.res.stringResource(com.cbkii.btandroidts.R.string.action_send_file))
             }
         },
         topBar = {

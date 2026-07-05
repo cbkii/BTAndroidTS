@@ -7,9 +7,6 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -23,16 +20,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.PreviewLightDark
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.datasource.CollectionPreviewParameterProvider
@@ -49,7 +42,6 @@ fun SendCommandTextField(
 	onImeAction: () -> Unit = {},
 	maxLines: Int = 2,
 	shape: Shape = MaterialTheme.shapes.large,
-	cursorColor: Brush = SolidColor(MaterialTheme.colorScheme.primary),
 	textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
 	color: Color = MaterialTheme.colorScheme.onSurface
 ) {
@@ -93,6 +85,8 @@ fun SendCommandTextField(
 							hint = currentHint
 							imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
 							inputType = android.text.InputType.TYPE_CLASS_TEXT
+							setMaxLines(maxLines)
+							setTextColor(color.toArgb())
 							addTextChangedListener(object : android.text.TextWatcher {
 								override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
 								override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -116,6 +110,7 @@ fun SendCommandTextField(
 							view.setSelection(value.length)
 						}
 						view.isEnabled = isEnable
+						view.textSize = textStyle.fontSize.value
 					},
 					modifier = Modifier.fillMaxWidth()
 				)

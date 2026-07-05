@@ -284,4 +284,7 @@
   <string name="action_try_all_methods">Try all supported methods</string>
 
   <string name="transports_label">Transports: %s</string>
+
+  <string name="error_opp_transfer_failed">OPP transfer failed: %s</string>
+
 </resources>

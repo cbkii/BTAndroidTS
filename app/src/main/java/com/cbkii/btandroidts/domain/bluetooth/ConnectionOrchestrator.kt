@@ -42,10 +42,8 @@ object ConnectionOrchestrator {
     }
 
     fun getBestMethod(uuids: List<UUID>): UUID? {
-        val mapped = uuids.associateWith { determineStrategy(it) }
-
-        return mapped.entries.firstOrNull { it.value == ConnectionRouteStrategy.HID_HOST }?.key
-            ?: mapped.entries.firstOrNull { it.value == ConnectionRouteStrategy.OPP_FILE_TRANSFER }?.key
-            ?: mapped.entries.firstOrNull { it.value == ConnectionRouteStrategy.RFCOMM_TERMINAL }?.key
+        return uuids.firstOrNull { determineStrategy(it) == ConnectionRouteStrategy.HID_HOST }
+            ?: uuids.firstOrNull { determineStrategy(it) == ConnectionRouteStrategy.OPP_FILE_TRANSFER }
+            ?: uuids.firstOrNull { determineStrategy(it) == ConnectionRouteStrategy.RFCOMM_TERMINAL }
     }
 }

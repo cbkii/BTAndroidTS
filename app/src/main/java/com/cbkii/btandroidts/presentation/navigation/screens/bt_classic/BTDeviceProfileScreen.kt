@@ -23,7 +23,11 @@ import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.BtProfileDestination
 import com.ramcosta.composedestinations.generated.destinations.ClientRouteDestination
+import com.ramcosta.composedestinations.generated.destinations.OppHistoryScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.PeripheralDetailScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import com.cbkii.btandroidts.presentation.feature_connect.bt_profile.ProfileNavigationEvent
+import com.cbkii.btandroidts.presentation.navigation.args.PeripheralDetailArgs
 import org.koin.androidx.compose.koinViewModel
 import kotlin.uuid.toKotlinUuid
 
@@ -49,18 +53,18 @@ fun AnimatedVisibilityScope.BTDeviceProfileScreen(
 	androidx.compose.runtime.LaunchedEffect(viewmodel.navEvents) {
 		viewmodel.navEvents.collect { event ->
 			when (event) {
-				com.cbkii.btandroidts.presentation.feature_connect.bt_profile.ProfileNavigationEvent.NavigateToHID -> {
-					val pArgs = com.cbkii.btandroidts.presentation.navigation.args.PeripheralDetailArgs(args.address, args.name ?: "Unknown")
-					navigator.navigate(com.ramcosta.composedestinations.generated.destinations.PeripheralDetailScreenDestination(pArgs)) {
+				ProfileNavigationEvent.NavigateToHID -> {
+					val pArgs = PeripheralDetailArgs(args.address, args.name ?: "Unknown")
+					navigator.navigate(PeripheralDetailScreenDestination(pArgs)) {
 						popUpTo(BtProfileDestination) { inclusive = true }
 					}
 				}
-				com.cbkii.btandroidts.presentation.feature_connect.bt_profile.ProfileNavigationEvent.NavigateToOPP -> {
-					navigator.navigate(com.ramcosta.composedestinations.generated.destinations.OppHistoryScreenDestination) {
+				ProfileNavigationEvent.NavigateToOPP -> {
+					navigator.navigate(OppHistoryScreenDestination) {
 						popUpTo(BtProfileDestination) { inclusive = true }
 					}
 				}
-				is com.cbkii.btandroidts.presentation.feature_connect.bt_profile.ProfileNavigationEvent.NavigateToRFCOMM -> {
+				is ProfileNavigationEvent.NavigateToRFCOMM -> {
 					navigator.navigate(ClientRouteDestination(address = args.address, uuid = event.uuid.toKotlinUuid())) {
 						popUpTo(BtProfileDestination) { inclusive = true }
 					}
