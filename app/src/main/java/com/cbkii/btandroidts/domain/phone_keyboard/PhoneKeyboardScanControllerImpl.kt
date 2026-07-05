@@ -9,6 +9,7 @@ import com.cbkii.btandroidts.domain.peripheral.HidHostController
 import com.cbkii.btandroidts.domain.peripheral.ProfileConnectionState
 import com.cbkii.btandroidts.domain.peripheral.InputDeviceRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -131,7 +133,8 @@ class PhoneKeyboardScanControllerImpl(
         working.values
             .sortedByDescending { PhoneKeyboardPolicy.calculateConfidenceScore(it) }
             .toList()
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default)
+     .stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _isScanning = MutableStateFlow(false)
     override val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
