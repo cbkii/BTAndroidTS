@@ -272,7 +272,6 @@
     <string name="navigation_expand">Expand navigation</string>
     <string name="navigation_collapse">Collapse navigation</string>
 
-  <string name="profile_rfcomm_spp">Serial terminal (RFCOMM/SPP)</string>
   <string name="profile_hid">Keyboard / mouse / controller (HID)</string>
   <string name="profile_opp">File transfer (OPP)</string>
   <string name="profile_a2dp_source">Audio Source (A2DP)</string>
@@ -283,5 +282,6 @@
   <string name="profile_btandroidts_internal">BTAndroidTS Internal</string>
   <string name="profile_unknown">Custom/Unknown</string>
   <string name="action_try_all_methods">Try all supported methods</string>
-  <string name="back_arrow_desc">Navigate back</string>
+
+  <string name="transports_label">Transports: %s</string>
 </resources>

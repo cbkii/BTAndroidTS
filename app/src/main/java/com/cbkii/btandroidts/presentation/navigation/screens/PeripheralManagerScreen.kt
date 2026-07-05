@@ -69,7 +69,7 @@ fun PeripheralManagerScreen(navigator: DestinationsNavigator) {
                         Text(text = device.displayName, style = MaterialTheme.typography.titleMedium)
                         Text(text = device.address.value, style = MaterialTheme.typography.bodySmall)
                         val types = device.transports.joinToString { it.name }
-                        Text(text = "Transports: $types", style = MaterialTheme.typography.labelSmall)
+                        Text(text = stringResource(R.string.transports_label, types), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

@@ -24,9 +24,12 @@ object ConnectionOrchestrator {
     }
 
     fun getHumanReadableNameRes(uuid: UUID): Int {
+        if (uuid.toString() == "3fe6c764-029f-48f0-a2d0-a43d9b1df5c8") {
+            return R.string.profile_btandroidts_internal
+        }
         val shortUuid = String.format(Locale.ROOT, "%04X", (uuid.mostSignificantBits ushr 32) and 0xFFFF)
         return when (shortUuid) {
-            "1101" -> R.string.profile_rfcomm_spp
+            "1101" -> R.string.bl_connect_profile_server_uuid_text
             "1124" -> R.string.profile_hid
             "1105", "1106" -> R.string.profile_opp
             "110A" -> R.string.profile_a2dp_source
@@ -34,7 +37,6 @@ object ConnectionOrchestrator {
             "111E" -> R.string.profile_hfp
             "112F" -> R.string.profile_pbap
             "112D" -> R.string.profile_sim_access
-            "0000" -> if (uuid.toString() == "3fe6c764-029f-48f0-a2d0-a43d9b1df5c8") R.string.profile_btandroidts_internal else R.string.profile_unknown
             else -> R.string.profile_unknown
         }
     }
