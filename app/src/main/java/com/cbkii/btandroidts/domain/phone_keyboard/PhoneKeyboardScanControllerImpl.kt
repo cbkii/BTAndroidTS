@@ -34,7 +34,7 @@ class PhoneKeyboardScanControllerImpl(
             emit(System.currentTimeMillis())
             delay(5_000L) // evaluate TTL every 5s
         }
-    }.flowOn(Dispatchers.IO)
+    }
 
     private val cacheLock = Any()
     private val _currentCandidates = LinkedHashMap<String, PhoneKeyboardCandidate>()
@@ -133,7 +133,8 @@ class PhoneKeyboardScanControllerImpl(
         working.values
             .sortedByDescending { PhoneKeyboardPolicy.calculateConfidenceScore(it) }
             .toList()
-    }.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.flowOn(Dispatchers.Default)
+     .stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _isScanning = MutableStateFlow(false)
     override val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
