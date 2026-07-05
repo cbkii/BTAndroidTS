@@ -68,8 +68,8 @@
   <string name="allow_discover">Allow Discoverability</string>
   <string name="device_discoverable_success">Device is now discoverable %d seconds</string>
   <string name="device_discoverable_denied">Device Discoverability denied</string>
-  <string name="close_connection_dialog_title">Close Connection</string>
-  <string name="close_connection_dialog_text">Are you sure you want to disconnect and close this connection</string>
+  <string name="close_connection_dialog_title">Close Terminal Session</string>
+  <string name="close_connection_dialog_text">Are you sure you want to close this active serial terminal session?</string>
   <string name="dialog_action_close">Close</string>
   <string name="dialog_action_cancel">Cancel</string>
   <string name="text_field_placeholder">Enter Text to Send</string>
@@ -83,7 +83,7 @@
   <string name="connection_accepted">Device Connected</string>
   <string name="devices_image_type">Device Image type %s</string>
   <string name="connection_server_listening">Listening…</string>
-  <string name="bt_server_route">Classic BT Server</string>
+  <string name="bt_server_route">Advanced Bluetooth tools</string>
   <!--  Settings receive-->
   <string name="connect_to_client">Connect</string>
   <string name="disconnect_from_client">Disconnect</string>
@@ -95,10 +95,10 @@
   <string name="bt_le_device_desc">Bluetooth low energy devices in your range</string>
   <string name="location_settings">Location Settings</string>
   <string name="le_available_devices">Services</string>
-  <string name="bl_connect_profile_server_uuid_text">Special Feature</string>
+  <string name="bl_connect_profile_server_uuid_text">Serial terminal (RFCOMM/SPP)</string>
   <string name="bl_connect_profile_server_uuid_desc">Special feature (uuid) that is used to connect to a server started by this app, on other device</string>
   <string name="bl_connect_profile_server_uuid">Connect to Server</string>
-  <string name="bl_connect_profile_device_uuid_text">Available Features</string>
+  <string name="bl_connect_profile_device_uuid_text">Available connection modes</string>
   <string name="bl_connect_profile_device_uuid_desc">The list of features (uuid) the device provides for connection</string>
   <string name="bl_connect_profile_device_uuid_fetching">Fetching device information…</string>
   <string name="bl_connect_profile_device_uuids_not_found">No UUIDs found</string>

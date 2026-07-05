@@ -23,6 +23,16 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.cbkii.btandroidts.domain.bluetooth.ConnectionOrchestrator
+import java.util.UUID
+
+sealed interface ProfileNavigationEvent {
+	data class NavigateToRFCOMM(val uuid: UUID) : ProfileNavigationEvent
+	object NavigateToHID : ProfileNavigationEvent
+	object NavigateToOPP : ProfileNavigationEvent
+	object NavigateToBLE : ProfileNavigationEvent
+	object Stay : ProfileNavigationEvent
+}
 
 class BluetoothProfileViewModel(
 	private val clientConnector: BluetoothClientConnector,
@@ -42,6 +52,9 @@ class BluetoothProfileViewModel(
 	override val uiEvents: SharedFlow<UiEvents>
 		get() = _uiEvents.asSharedFlow()
 
+	private val _navEvents = MutableSharedFlow<ProfileNavigationEvent>()
+	val navEvents = _navEvents.asSharedFlow()
+
 	private val device: BluetoothDeviceArgs?
 		get() = savedStateHandle.navArgs()
 
@@ -51,6 +64,22 @@ class BluetoothProfileViewModel(
 			BTProfileEvents.OnRetryFetchUUID -> refreshUUIDs()
 
 		}
+	}
+
+	fun onConnectSelected(uuid: UUID) = viewModelScope.launch {
+		val strategy = ConnectionOrchestrator.determineStrategy(uuid)
+		val event = when (strategy) {
+			com.cbkii.btandroidts.domain.bluetooth.ConnectionRouteStrategy.HID_HOST -> ProfileNavigationEvent.NavigateToHID
+			com.cbkii.btandroidts.domain.bluetooth.ConnectionRouteStrategy.OPP_FILE_TRANSFER -> ProfileNavigationEvent.NavigateToOPP
+			com.cbkii.btandroidts.domain.bluetooth.ConnectionRouteStrategy.RFCOMM_TERMINAL -> ProfileNavigationEvent.NavigateToRFCOMM(uuid)
+			else -> ProfileNavigationEvent.NavigateToRFCOMM(uuid)
+		}
+		_navEvents.emit(event)
+	}
+
+	fun onTryAllMethods() = viewModelScope.launch {
+		val bestUuid = ConnectionOrchestrator.getBestMethod(_profile.value.deviceUUIDS)
+		bestUuid?.let { onConnectSelected(it) }
 	}
 
 	private fun loadDeviceUUIDs() = viewModelScope.launch {

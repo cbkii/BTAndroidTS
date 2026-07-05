@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -66,62 +67,65 @@ fun SendCommandTextField(
 		label = "Icon button colors"
 	)
 
-	BasicTextField(
-		value = value,
-		onValueChange = onChange,
-		decorationBox = { content ->
-			Row(
-				verticalAlignment = Alignment.CenterVertically
+	Row(
+		verticalAlignment = Alignment.CenterVertically,
+		modifier = modifier
+	) {
+		Surface(
+			color = surfaceColor,
+			shape = shape,
+			contentColor = color,
+			modifier = Modifier.weight(1f),
+		) {
+			Box(
+				modifier = Modifier.padding(all = 16.dp),
 			) {
-				Surface(
-					color = surfaceColor,
-					shape = shape,
-					contentColor = color,
-					modifier = Modifier.weight(1f),
-				) {
-					Box(
-						modifier = Modifier.padding(all = 16.dp),
-					) {
-						when {
-							value.isBlank() ->
-								Text(
-									text = stringResource(id = R.string.text_field_placeholder),
-									style = MaterialTheme.typography.labelLarge,
-									color = MaterialTheme.colorScheme.onSurfaceVariant
-										.copy(alpha = .5f)
-								)
-
-							else -> content()
+				androidx.compose.ui.viewinterop.AndroidView(
+					factory = { ctx ->
+						android.widget.EditText(ctx).apply {
+							setText(value)
+							background = null
+							hint = "Send command..."
+							addTextChangedListener(object : android.text.TextWatcher {
+								override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+								override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+								override fun afterTextChanged(s: android.text.Editable?) {
+									onChange(s?.toString() ?: "")
+								}
+							})
+							setOnEditorActionListener { _, actionId, _ ->
+								if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND) {
+									onImeAction()
+									true
+								} else {
+									false
+								}
+							}
 						}
-					}
-				}
-				IconButton(
-					onClick = onImeAction,
-					enabled = isEnable,
-					colors = IconButtonDefaults
-						.filledIconButtonColors(containerColor = iconButtonColor)
-				) {
-					Icon(
-						painter = painterResource(id = R.drawable.ic_send),
-						contentDescription = stringResource(id = R.string.dialog_action_send),
-					)
-				}
+					},
+					update = { view ->
+						if (view.text.toString() != value) {
+							view.setText(value)
+							view.setSelection(value.length)
+						}
+						view.isEnabled = isEnable
+					},
+					modifier = Modifier.fillMaxWidth()
+				)
 			}
-		},
-		enabled = isEnable,
-		textStyle = textStyle.copy(color = color),
-		cursorBrush = cursorColor,
-		keyboardActions = KeyboardActions(onSend = { onImeAction() }),
-		keyboardOptions = KeyboardOptions(
-			capitalization = KeyboardCapitalization.None,
-			autoCorrectEnabled = false,
-			keyboardType = KeyboardType.Text,
-			imeAction = ImeAction.Send
-		),
-		maxLines = maxLines,
-		interactionSource = interaction,
-		modifier = modifier.focusable(enabled = true)
-	)
+		}
+		IconButton(
+			onClick = onImeAction,
+			enabled = isEnable,
+			colors = IconButtonDefaults
+				.filledIconButtonColors(containerColor = iconButtonColor)
+		) {
+			Icon(
+				painter = painterResource(id = R.drawable.ic_send),
+				contentDescription = stringResource(id = R.string.dialog_action_send),
+			)
+		}
+	}
 }
 
 private class TextValuePreviewParams :

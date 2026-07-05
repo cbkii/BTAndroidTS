@@ -42,12 +42,27 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
     Scaffold(topBar = { TopAppBar(title = { Text("Keyboard Test") }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
         Row(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = 55.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(value = text, onValueChange = { newText ->
-                    text = newText
-                    if (newText.isNotEmpty()) {
-                        viewModel.recordSuccessOnce()
-                    }
-                }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Type here...") })
+                androidx.compose.ui.viewinterop.AndroidView(
+                    factory = { ctx ->
+                        android.widget.EditText(ctx).apply {
+                            hint = "Type here..."
+                            isFocusable = true
+                            isFocusableInTouchMode = true
+                            addTextChangedListener(object : android.text.TextWatcher {
+                                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                                override fun afterTextChanged(s: android.text.Editable?) {
+                                    if (!s.isNullOrEmpty()) viewModel.recordSuccessOnce()
+                                }
+                            })
+                            setOnKeyListener { _, _, event ->
+                                if (event.action == android.view.KeyEvent.ACTION_DOWN) viewModel.recordSuccessOnce()
+                                false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 Button(onClick = {
                     try {

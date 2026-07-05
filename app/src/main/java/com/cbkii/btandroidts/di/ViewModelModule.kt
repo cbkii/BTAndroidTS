@@ -23,4 +23,5 @@ val viewModelModule = module {
 	viewModelOf(::BLEServerViewModel)
 	//settings
 	viewModelOf(::AppSettingsViewModel)
+
 }

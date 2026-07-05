@@ -20,6 +20,12 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
 import java.text.DateFormat
 import java.util.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import com.cbkii.btandroidts.domain.peripheral.OppShareRequest
+import com.cbkii.btandroidts.domain.peripheral.OppShareItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -30,8 +36,21 @@ fun OppHistoryScreen(
     val viewModel = koinViewModel<OppHistoryViewModel>()
     val state by viewModel.state.collectAsState()
     val dateFormat = remember { DateFormat.getDateTimeInstance() }
+    val context = LocalContext.current
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            val request = OppShareRequest(items = listOf(OppShareItem(uri = it, text = null, mimeType = null)), mimeType = "*/*")
+            viewModel.send(context, request)
+        }
+    }
 
     Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = { launcher.launch("*/*") }) {
+                Text("Send File")
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Transfer History") },

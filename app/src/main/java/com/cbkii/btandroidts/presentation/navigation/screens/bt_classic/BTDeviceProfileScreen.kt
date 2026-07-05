@@ -46,23 +46,39 @@ fun AnimatedVisibilityScope.BTDeviceProfileScreen(
 		onPopBack = dropUnlessResumed { navigator.popBackStack() }
 	)
 
+	androidx.compose.runtime.LaunchedEffect(viewmodel.navEvents) {
+		viewmodel.navEvents.collect { event ->
+			when (event) {
+				com.cbkii.btandroidts.presentation.feature_connect.bt_profile.ProfileNavigationEvent.NavigateToHID -> {
+					val pArgs = com.cbkii.btandroidts.presentation.navigation.args.PeripheralDetailArgs(args.address, args.name ?: "Unknown")
+					navigator.navigate(com.ramcosta.composedestinations.generated.destinations.PeripheralDetailScreenDestination(pArgs)) {
+						popUpTo(BtProfileDestination) { inclusive = true }
+					}
+				}
+				com.cbkii.btandroidts.presentation.feature_connect.bt_profile.ProfileNavigationEvent.NavigateToOPP -> {
+					navigator.navigate(com.ramcosta.composedestinations.generated.destinations.OppHistoryScreenDestination) {
+						popUpTo(BtProfileDestination) { inclusive = true }
+					}
+				}
+				is com.cbkii.btandroidts.presentation.feature_connect.bt_profile.ProfileNavigationEvent.NavigateToRFCOMM -> {
+					navigator.navigate(ClientRouteDestination(address = args.address, uuid = event.uuid.toKotlinUuid())) {
+						popUpTo(BtProfileDestination) { inclusive = true }
+					}
+				}
+				else -> {}
+			}
+		}
+	}
+
 	CompositionLocalProvider(LocalSharedTransitionVisibilityScopeProvider provides this) {
 		BluetoothProfileRoute(
 			address = args.address,
 			state = profile,
 			onEvent = viewmodel::onEvent,
 			onConnect = { uuid ->
-				navigator.navigate(
-					direction = ClientRouteDestination(
-						address = args.address,
-						uuid = uuid.toKotlinUuid()
-					),
-				) {
-					popUpTo(BtProfileDestination) {
-						inclusive = true
-					}
-				}
+				viewmodel.onConnectSelected(uuid)
 			},
+			onTryAll = { viewmodel.onTryAllMethods() },
 			navigation = {
 				IconButton(onClick = dropUnlessResumed(block = navigator::popBackStack)) {
 					Icon(

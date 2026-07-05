@@ -218,9 +218,9 @@ fun Ts18ActionSidebar(
 
 	BoxWithConstraints(modifier = modifier.fillMaxHeight()) {
 		val collapsedWidth = 80.dp
-		val expandedWidth = (maxWidth * 0.20f)
+		val expandedWidth = (maxWidth * 0.40f)
 			.coerceAtLeast(collapsedWidth)
-			.coerceAtMost(250.dp)
+			.coerceAtMost(350.dp)
 		val actualWidth = if (collapsed) collapsedWidth else expandedWidth
 
 		NavigationRail(
@@ -280,7 +280,9 @@ private fun SidebarItem(
 				Text(
 					text = stringResource(labelRes),
 					maxLines = 1,
-					overflow = TextOverflow.Ellipsis
+					overflow = TextOverflow.Ellipsis,
+					modifier = Modifier.fillMaxWidth(),
+					textAlign = androidx.compose.ui.text.style.TextAlign.Start
 				)
 			}
 		} else {

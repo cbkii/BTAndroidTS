@@ -23,6 +23,10 @@ class OppHistoryViewModel(
 
     fun retry(id: String) { }
 
+    fun send(context: android.content.Context, request: com.cbkii.btandroidts.domain.peripheral.OppShareRequest) {
+        transferController.delegateToStockOpp(context, request, null)
+    }
+
     fun cancel(id: String) {
         transferController.cancel(id)
     }

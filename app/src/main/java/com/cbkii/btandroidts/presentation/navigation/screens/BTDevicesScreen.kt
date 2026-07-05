@@ -66,8 +66,8 @@ fun AnimatedVisibilityScope.BTDevicesScreen(
 			onDashboardAction = { action ->
 				when (action) {
 					Ts18DashboardAction.PHONE_AUTO -> viewModel.onEvents(BTDevicesScreenEvents.OpenTopwayBluetooth)
-					Ts18DashboardAction.PERIPHERALS -> viewModel.onEvents(BTDevicesScreenEvents.ShowPeripheralManager)
-					Ts18DashboardAction.FILE_SHARING -> viewModel.onEvents(BTDevicesScreenEvents.ShowFileSharing)
+					Ts18DashboardAction.PERIPHERALS -> navigator.navigate(com.ramcosta.composedestinations.generated.destinations.PeripheralManagerScreenDestination)
+					Ts18DashboardAction.FILE_SHARING -> navigator.navigate(com.ramcosta.composedestinations.generated.destinations.OppHistoryScreenDestination)
 					Ts18DashboardAction.SUPERVISION -> viewModel.onEvents(BTDevicesScreenEvents.ManualSupervisorRetry)
 					Ts18DashboardAction.DIAGNOSTICS -> viewModel.onEvents(BTDevicesScreenEvents.ExportDiagnostics)
 					Ts18DashboardAction.KEYBOARD_TEST -> navigator.navigate(KeyboardTestDestination)
