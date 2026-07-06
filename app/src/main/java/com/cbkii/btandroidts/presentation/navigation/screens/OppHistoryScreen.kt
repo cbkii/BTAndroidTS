@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.domain.peripheral.OppTransferState
@@ -20,6 +22,13 @@ import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
 import java.text.DateFormat
 import java.util.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.cbkii.btandroidts.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -30,8 +39,32 @@ fun OppHistoryScreen(
     val viewModel = koinViewModel<OppHistoryViewModel>()
     val state by viewModel.state.collectAsState()
     val dateFormat = remember { DateFormat.getDateTimeInstance() }
+    val context = LocalContext.current
+    val errorMsgTemplate = stringResource(R.string.error_opp_transfer_failed)
+    val successMsg = stringResource(R.string.opp_transfer_success_toast)
+    val coroutineScope = rememberCoroutineScope()
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            coroutineScope.launch {
+                viewModel.sendFile(it)
+                    .onSuccess {
+                        Toast.makeText(context, successMsg, Toast.LENGTH_SHORT).show()
+                    }
+                    .onFailure { err ->
+                        val errorMsg = String.format(errorMsgTemplate, err.message ?: "Unknown error")
+                        Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                    }
+            }
+        }
+    }
 
     Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = { launcher.launch("*/*") }) {
+                Text(stringResource(R.string.action_send_file))
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Transfer History") },

@@ -7,6 +7,9 @@ import com.cbkii.btandroidts.presentation.feature_devices.BTDeviceViewmodel
 import com.cbkii.btandroidts.presentation.feature_le_connect.BLEDeviceViewModel
 import com.cbkii.btandroidts.presentation.feature_le_server.BLEServerViewModel
 import com.cbkii.btandroidts.presentation.feature_settings.AppSettingsViewModel
+import com.cbkii.btandroidts.presentation.feature_devices.detail.PeripheralDetailViewModel
+import com.cbkii.btandroidts.presentation.navigation.screens.PeripheralManagerViewModel
+import com.cbkii.btandroidts.presentation.feature_opp.OppHistoryViewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
@@ -23,4 +26,11 @@ val viewModelModule = module {
 	viewModelOf(::BLEServerViewModel)
 	//settings
 	viewModelOf(::AppSettingsViewModel)
+
+	//peripherals
+	viewModelOf(::PeripheralManagerViewModel)
+	viewModelOf(::PeripheralDetailViewModel)
+
+	//opp
+	viewModelOf(::OppHistoryViewModel)
 }

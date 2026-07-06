@@ -1,8 +1,10 @@
 package com.cbkii.btandroidts.presentation.feature_opp
 
 import androidx.lifecycle.ViewModel
+import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.cbkii.btandroidts.domain.peripheral.FileTransferController
+import com.cbkii.btandroidts.domain.peripheral.OppShareDelegate
 import com.cbkii.btandroidts.domain.peripheral.OppTransferHistoryItem
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +16,8 @@ data class OppHistoryState(
 )
 
 class OppHistoryViewModel(
-    private val transferController: FileTransferController
+    private val transferController: FileTransferController,
+    private val oppShareDelegate: OppShareDelegate
 ) : ViewModel() {
 
     val state: StateFlow<OppHistoryState> = transferController.history
@@ -22,6 +25,10 @@ class OppHistoryViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OppHistoryState())
 
     fun retry(id: String) { }
+
+    suspend fun sendFile(uri: Uri): Result<com.cbkii.btandroidts.domain.peripheral.OppTransferHistoryItem> {
+        return oppShareDelegate.sendFile(uri)
+    }
 
     fun cancel(id: String) {
         transferController.cancel(id)

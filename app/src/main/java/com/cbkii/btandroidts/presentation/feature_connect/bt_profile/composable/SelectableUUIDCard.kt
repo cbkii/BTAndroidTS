@@ -17,10 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.R
+import com.cbkii.btandroidts.domain.bluetooth.ConnectionOrchestrator
 import java.util.UUID
 
 @Composable
@@ -34,9 +36,9 @@ fun SelectableUUIDCard(
 	fontFamily: FontFamily = FontFamily.Monospace,
 ) {
 
-	val uuidName by remember(uuid, uniqueName) {
-		derivedStateOf { uniqueName ?: "$uuid" }
-	}
+	val uuidNameStrRes = remember(uuid) { ConnectionOrchestrator.getHumanReadableNameRes(uuid) }
+	val uuidNameStr = stringResource(id = uuidNameStrRes)
+	val displayStr = uniqueName ?: "$uuidNameStr\n$uuid"
 
 	Row(
 		modifier = modifier
@@ -53,7 +55,7 @@ fun SelectableUUIDCard(
 				.colors(selectedColor = MaterialTheme.colorScheme.secondary)
 		)
 		Text(
-			text = uuidName,
+			text = displayStr,
 			style = MaterialTheme.typography.labelLarge,
 			fontFamily = fontFamily,
 			color = MaterialTheme.colorScheme.onSurface,
