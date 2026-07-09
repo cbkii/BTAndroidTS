@@ -38,17 +38,9 @@ class ApplicationPeripheralSupervisor(
 
 	init {
 		scope.launch {
-			var lastSavedPeripherals: List<SavedPeripheralRecord>? = null
-			var cachedSavedPeripherals: List<SavedPeripheral> = emptyList()
-
-			var lastRetryStates: Map<BluetoothAddress, PeripheralRetryState>? = null
-			var cachedRetryStates: List<ReconnectAttempt> = emptyList()
-
-			policyStore.policy.collect { policy ->
-				val newSavedPeripherals = if (policy.savedPeripherals === lastSavedPeripherals) {
-					cachedSavedPeripherals
-				} else {
-					val result = policy.savedPeripherals.map { saved ->
+			val savedPeripheralsMapper =
+				MemoizedMapper<List<SavedPeripheralRecord>, SavedPeripheral> { list ->
+					list.map { saved ->
 						SavedPeripheral(
 							address = saved.address,
 							displayName = saved.displayName,
@@ -56,15 +48,11 @@ class ApplicationPeripheralSupervisor(
 							savedAtMillis = saved.savedAtMillis,
 						)
 					}
-					lastSavedPeripherals = policy.savedPeripherals
-					cachedSavedPeripherals = result
-					result
 				}
 
-				val newRetryStates = if (policy.retryStates === lastRetryStates) {
-					cachedRetryStates
-				} else {
-					val result = policy.retryStates.map { (address, retry) ->
+			val retryStatesMapper =
+				MemoizedMapper<Map<BluetoothAddress, PeripheralRetryState>, ReconnectAttempt> { map ->
+					map.map { (address, retry) ->
 						ReconnectAttempt(
 							address = address,
 							attemptNumber = retry.attempt,
@@ -72,10 +60,11 @@ class ApplicationPeripheralSupervisor(
 							reason = retry.lastError ?: "Scheduled retry",
 						)
 					}
-					lastRetryStates = policy.retryStates
-					cachedRetryStates = result
-					result
 				}
+
+			policyStore.policy.collect { policy ->
+				val newSavedPeripherals = savedPeripheralsMapper.get(policy.savedPeripherals)
+				val newRetryStates = retryStatesMapper.get(policy.retryStates)
 
 				_state.value = PeripheralSupervisorState(
 					enabled = policy.supervisionEnabled,
@@ -186,5 +175,20 @@ class ApplicationPeripheralSupervisor(
 		HidOperationResult.RequiresPrivilege -> "HID host requires privileged install"
 		HidOperationResult.RequiresDeviceValidation -> "HID result requires TS18 validation"
 		is HidOperationResult.Failed -> "HID failed: $reason"
+	}
+
+	private class MemoizedMapper<T, R>(
+		private val mapper: (T) -> List<R>,
+	) {
+		private var lastSource: T? = null
+		private var cached: List<R> = emptyList()
+
+		fun get(source: T): List<R> {
+			if (source === lastSource) return cached
+			val result = mapper(source)
+			lastSource = source
+			cached = result
+			return result
+		}
 	}
 }
