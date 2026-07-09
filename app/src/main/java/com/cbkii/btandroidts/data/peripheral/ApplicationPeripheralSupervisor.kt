@@ -15,7 +15,6 @@ import com.cbkii.btandroidts.domain.peripheral.ReconnectBackoff
 import com.cbkii.btandroidts.domain.peripheral.ReconnectPolicy
 import com.cbkii.btandroidts.domain.peripheral.SavedPeripheral
 import com.cbkii.btandroidts.domain.peripheral.SavedPeripheralRecord
-import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,19 +48,14 @@ class ApplicationPeripheralSupervisor(
 				val newSavedPeripherals = if (policy.savedPeripherals === lastSavedPeripherals) {
 					cachedSavedPeripherals
 				} else {
-					val builder = persistentListOf<SavedPeripheral>().builder()
-					for (index in policy.savedPeripherals.indices) {
-						val saved = policy.savedPeripherals[index]
-						builder.add(
-							SavedPeripheral(
-								address = saved.address,
-								displayName = saved.displayName,
-								policy = saved.policy,
-								savedAtMillis = saved.savedAtMillis,
-							)
+					val result = policy.savedPeripherals.map { saved ->
+						SavedPeripheral(
+							address = saved.address,
+							displayName = saved.displayName,
+							policy = saved.policy,
+							savedAtMillis = saved.savedAtMillis,
 						)
 					}
-					val result = builder.build()
 					lastSavedPeripherals = policy.savedPeripherals
 					cachedSavedPeripherals = result
 					result
@@ -70,18 +64,14 @@ class ApplicationPeripheralSupervisor(
 				val newRetryStates = if (policy.retryStates === lastRetryStates) {
 					cachedRetryStates
 				} else {
-					val builder = persistentListOf<ReconnectAttempt>().builder()
-					for ((address, retry) in policy.retryStates) {
-						builder.add(
-							ReconnectAttempt(
-								address = address,
-								attemptNumber = retry.attempt,
-								nextAttemptAtMillis = retry.nextAttemptAtMillis,
-								reason = retry.lastError ?: "Scheduled retry",
-							)
+					val result = policy.retryStates.map { (address, retry) ->
+						ReconnectAttempt(
+							address = address,
+							attemptNumber = retry.attempt,
+							nextAttemptAtMillis = retry.nextAttemptAtMillis,
+							reason = retry.lastError ?: "Scheduled retry",
 						)
 					}
-					val result = builder.build()
 					lastRetryStates = policy.retryStates
 					cachedRetryStates = result
 					result
