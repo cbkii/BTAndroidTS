@@ -112,21 +112,18 @@ class LocalTs18DiagnosticsCollector(
 		return "${parts[0]}:${parts[1]}:xx:xx:xx:${parts[5]}"
 	}
 
-	private suspend fun readBootId(): String? {
-		if (bootIdFetched) return cachedBootId
-		bootIdMutex.withLock {
-			if (!bootIdFetched) {
-				cachedBootId = withContext(Dispatchers.IO) {
-					runCatching {
-						File("/proc/sys/kernel/random/boot_id")
-							.readText()
-							.trim()
-							.take(64)
-					}.getOrNull()
-				}
-				bootIdFetched = true
+	private suspend fun readBootId(): String? = bootIdMutex.withLock {
+		if (!bootIdFetched) {
+			cachedBootId = withContext(Dispatchers.IO) {
+				runCatching {
+					File("/proc/sys/kernel/random/boot_id")
+						.readText()
+						.trim()
+						.take(64)
+				}.getOrNull()
 			}
+			bootIdFetched = true
 		}
-		return cachedBootId
+		cachedBootId
 	}
 }
