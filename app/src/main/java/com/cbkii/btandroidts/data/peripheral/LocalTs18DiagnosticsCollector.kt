@@ -13,6 +13,8 @@ import com.cbkii.btandroidts.domain.peripheral.TopwayLaneAdapter
 import com.cbkii.btandroidts.domain.peripheral.Ts18DiagnosticsCollector
 import com.cbkii.btandroidts.domain.peripheral.Ts18DiagnosticsReport
 import com.cbkii.btandroidts.domain.peripheral.VendorPackageInspector
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class LocalTs18DiagnosticsCollector(
@@ -27,6 +29,8 @@ class LocalTs18DiagnosticsCollector(
 ) : Ts18DiagnosticsCollector {
 
 	private val appContext = context.applicationContext
+	private var cachedBootId: String? = null
+	private var bootIdFetched = false
 
 	override suspend fun collect(): Ts18DiagnosticsReport {
 		val devices = inventoryRepository.devices.value
@@ -105,6 +109,13 @@ class LocalTs18DiagnosticsCollector(
 		return "${parts[0]}:${parts[1]}:xx:xx:xx:${parts[5]}"
 	}
 
-	private fun readBootId(): String? =
-		runCatching { File("/proc/sys/kernel/random/boot_id").readText().trim().take(64) }.getOrNull()
+	private suspend fun readBootId(): String? {
+		if (!bootIdFetched) {
+			cachedBootId = withContext(Dispatchers.IO) {
+				runCatching { File("/proc/sys/kernel/random/boot_id").readText().trim().take(64) }.getOrNull()
+			}
+			bootIdFetched = true
+		}
+		return cachedBootId
+	}
 }
