@@ -13,9 +13,11 @@ import com.cbkii.btandroidts.domain.peripheral.TopwayLaneAdapter
 import com.cbkii.btandroidts.domain.peripheral.Ts18DiagnosticsCollector
 import com.cbkii.btandroidts.domain.peripheral.Ts18DiagnosticsReport
 import com.cbkii.btandroidts.domain.peripheral.VendorPackageInspector
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class LocalTs18DiagnosticsCollector(
 	context: Context,
@@ -29,6 +31,7 @@ class LocalTs18DiagnosticsCollector(
 ) : Ts18DiagnosticsCollector {
 
 	private val appContext = context.applicationContext
+	private val bootIdMutex = Mutex()
 	private var cachedBootId: String? = null
 	private var bootIdFetched = false
 
@@ -73,10 +76,10 @@ class LocalTs18DiagnosticsCollector(
 			policy.retryStates.forEach { (address, retry) ->
 				add("retry address=${redactAddress(address.value)} attempt=${retry.attempt} next=${retry.nextAttemptAtMillis}")
 			}
-            add("input.verification.count=${policy.inputVerifications.size}")
-            policy.inputVerifications.forEach { (address, result) ->
-                add("input.verification address=${redactAddress(address.value)} success=${result.success} timestamp=${result.timestampMillis}")
-            }
+			add("input.verification.count=${policy.inputVerifications.size}")
+			policy.inputVerifications.forEach { (address, result) ->
+				add("input.verification address=${redactAddress(address.value)} success=${result.success} timestamp=${result.timestampMillis}")
+			}
 			add("input.count=${inputDevices.size}")
 			inputDevices.forEach { input ->
 				add("input id=${input.id} name=${input.name} keyboard=${input.isKeyboard} pointer=${input.isPointer}")
@@ -110,11 +113,19 @@ class LocalTs18DiagnosticsCollector(
 	}
 
 	private suspend fun readBootId(): String? {
-		if (!bootIdFetched) {
-			cachedBootId = withContext(Dispatchers.IO) {
-				runCatching { File("/proc/sys/kernel/random/boot_id").readText().trim().take(64) }.getOrNull()
+		if (bootIdFetched) return cachedBootId
+		bootIdMutex.withLock {
+			if (!bootIdFetched) {
+				cachedBootId = withContext(Dispatchers.IO) {
+					runCatching {
+						File("/proc/sys/kernel/random/boot_id")
+							.readText()
+							.trim()
+							.take(64)
+					}.getOrNull()
+				}
+				bootIdFetched = true
 			}
-			bootIdFetched = true
 		}
 		return cachedBootId
 	}
