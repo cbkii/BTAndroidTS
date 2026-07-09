@@ -184,7 +184,7 @@ class ApplicationPeripheralSupervisor(
 		private var cached: List<R> = emptyList()
 
 		fun get(source: T): List<R> {
-			if (source === lastSource) return cached
+			if (source == lastSource) return cached
 			val result = mapper(source)
 			lastSource = source
 			cached = result
