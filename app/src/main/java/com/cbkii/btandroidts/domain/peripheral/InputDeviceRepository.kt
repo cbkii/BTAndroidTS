@@ -6,6 +6,7 @@ interface InputDeviceRepository {
 	fun listInputDevices(): List<AndroidInputDeviceInfo>
 	fun hasInputDeviceFor(address: BluetoothAddress): Boolean
 	fun getVerificationResult(address: BluetoothAddress): Flow<InputVerificationResult?>
+	fun getVerificationResults(): Flow<Map<BluetoothAddress, InputVerificationResult>>
 	suspend fun recordVerification(address: BluetoothAddress, success: Boolean)
 }
 

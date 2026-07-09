@@ -8,6 +8,7 @@ import com.cbkii.btandroidts.domain.peripheral.ScanStatus
 import com.cbkii.btandroidts.domain.peripheral.HidHostController
 import com.cbkii.btandroidts.domain.peripheral.ProfileConnectionState
 import com.cbkii.btandroidts.domain.peripheral.InputDeviceRepository
+import com.cbkii.btandroidts.domain.peripheral.AndroidInputDeviceInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -19,9 +20,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+
 class PhoneKeyboardScanControllerImpl(
     private val inventoryRepository: BluetoothDeviceInventoryRepository,
     private val hidHostController: HidHostController,
@@ -44,9 +44,12 @@ class PhoneKeyboardScanControllerImpl(
     override val candidates: StateFlow<List<PhoneKeyboardCandidate>> = combine(
         inventoryRepository.devices,
         hidHostController.profileStates,
+        inputDeviceRepository.getVerificationResults(),
         tickerFlow,
         clearTrigger
-    ) { unifiedDevices, hidStates, currentTime, currentClearTrigger ->
+    ) { unifiedDevices, hidStates, verificationResults, currentTime, currentClearTrigger ->
+        val inputDevices = inputDeviceRepository.listInputDevices()
+
         val (working, initialGeneration) = synchronized(cacheLock) {
             val map = LinkedHashMap<String, PhoneKeyboardCandidate>(_currentCandidates.size + unifiedDevices.size)
             map.putAll(_currentCandidates)
@@ -78,12 +81,9 @@ class PhoneKeyboardScanControllerImpl(
 
             val isBonded = device.bondState == com.cbkii.btandroidts.domain.peripheral.BondStatus.BONDED
             val hidProfileState = hidStates[address] ?: ProfileConnectionState.UNKNOWN
-            val hasInputNode = inputDeviceRepository.hasInputDeviceFor(address)
+            val hasInputNode = inputDevices.hasInputDeviceFor(address)
 
-            // Check verification result safely via short timeout
-            val result = withTimeoutOrNull(500L) {
-                 inputDeviceRepository.getVerificationResult(address).first()
-            }
+            val result = verificationResults[address]
             val isEventVerified = result?.success == true
 
             val inputVerificationState = when {
@@ -162,5 +162,14 @@ class PhoneKeyboardScanControllerImpl(
             _currentCandidates.clear()
         }
         clearTrigger.value = System.currentTimeMillis()
+    }
+}
+
+private fun List<AndroidInputDeviceInfo>.hasInputDeviceFor(address: BluetoothAddress): Boolean {
+    val compact = address.value.replace(":", "")
+    return any { device ->
+        device.descriptor.contains(address.value, ignoreCase = true) ||
+            device.descriptor.contains(compact, ignoreCase = true) ||
+            device.name.contains(address.value, ignoreCase = true)
     }
 }

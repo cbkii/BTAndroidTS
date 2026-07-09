@@ -4,6 +4,7 @@ import android.view.InputDevice
 import com.cbkii.btandroidts.domain.peripheral.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 class AndroidInputDeviceRepository(
 	private val policyStore: PeripheralPolicyStore,
@@ -35,6 +36,9 @@ class AndroidInputDeviceRepository(
 
 	override fun getVerificationResult(address: BluetoothAddress): Flow<InputVerificationResult?> =
 		policyStore.policy.map { it.inputVerifications[address] }
+
+	override fun getVerificationResults(): Flow<Map<BluetoothAddress, InputVerificationResult>> =
+		policyStore.policy.map { it.inputVerifications }.distinctUntilChanged()
 
 	override suspend fun recordVerification(address: BluetoothAddress, success: Boolean) {
 		policyStore.recordInputVerification(address, success, System.currentTimeMillis())
