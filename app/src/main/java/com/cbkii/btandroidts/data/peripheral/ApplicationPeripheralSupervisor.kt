@@ -38,26 +38,39 @@ class ApplicationPeripheralSupervisor(
 
 	init {
 		scope.launch {
-			policyStore.policy.collect { policy ->
-				_state.value = PeripheralSupervisorState(
-					enabled = policy.supervisionEnabled,
-					safeModeEnabled = policy.safeModeEnabled,
-					savedPeripherals = policy.savedPeripherals.map { saved ->
+			val savedPeripheralsMapper =
+				MemoizedMapper<List<SavedPeripheralRecord>, SavedPeripheral> { list ->
+					list.map { saved ->
 						SavedPeripheral(
 							address = saved.address,
 							displayName = saved.displayName,
 							policy = saved.policy,
 							savedAtMillis = saved.savedAtMillis,
 						)
-					},
-					activeAttempts = policy.retryStates.map { (address, retry) ->
+					}
+				}
+
+			val retryStatesMapper =
+				MemoizedMapper<Map<BluetoothAddress, PeripheralRetryState>, ReconnectAttempt> { map ->
+					map.map { (address, retry) ->
 						ReconnectAttempt(
 							address = address,
 							attemptNumber = retry.attempt,
 							nextAttemptAtMillis = retry.nextAttemptAtMillis,
 							reason = retry.lastError ?: "Scheduled retry",
 						)
-					},
+					}
+				}
+
+			policyStore.policy.collect { policy ->
+				val newSavedPeripherals = savedPeripheralsMapper.get(policy.savedPeripherals)
+				val newRetryStates = retryStatesMapper.get(policy.retryStates)
+
+				_state.value = PeripheralSupervisorState(
+					enabled = policy.supervisionEnabled,
+					safeModeEnabled = policy.safeModeEnabled,
+					savedPeripherals = newSavedPeripherals,
+					activeAttempts = newRetryStates,
 					lastEvent = _state.value.lastEvent,
 				)
 			}
@@ -162,5 +175,20 @@ class ApplicationPeripheralSupervisor(
 		HidOperationResult.RequiresPrivilege -> "HID host requires privileged install"
 		HidOperationResult.RequiresDeviceValidation -> "HID result requires TS18 validation"
 		is HidOperationResult.Failed -> "HID failed: $reason"
+	}
+
+	private class MemoizedMapper<T, R>(
+		private val mapper: (T) -> List<R>,
+	) {
+		private var lastSource: T? = null
+		private var cached: List<R> = emptyList()
+
+		fun get(source: T): List<R> {
+			if (source == lastSource) return cached
+			val result = mapper(source)
+			lastSource = source
+			cached = result
+			return result
+		}
 	}
 }
