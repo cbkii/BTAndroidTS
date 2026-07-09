@@ -44,9 +44,10 @@ class PhoneKeyboardScanControllerImpl(
     override val candidates: StateFlow<List<PhoneKeyboardCandidate>> = combine(
         inventoryRepository.devices,
         hidHostController.profileStates,
+        inputDeviceRepository.getVerificationResults(),
         tickerFlow,
         clearTrigger
-    ) { unifiedDevices, hidStates, currentTime, currentClearTrigger ->
+    ) { unifiedDevices, hidStates, verificationResults, currentTime, currentClearTrigger ->
         val (working, initialGeneration) = synchronized(cacheLock) {
             val map = LinkedHashMap<String, PhoneKeyboardCandidate>(_currentCandidates.size + unifiedDevices.size)
             map.putAll(_currentCandidates)
@@ -80,10 +81,7 @@ class PhoneKeyboardScanControllerImpl(
             val hidProfileState = hidStates[address] ?: ProfileConnectionState.UNKNOWN
             val hasInputNode = inputDeviceRepository.hasInputDeviceFor(address)
 
-            // Check verification result safely via short timeout
-            val result = withTimeoutOrNull(500L) {
-                 inputDeviceRepository.getVerificationResult(address).first()
-            }
+            val result = verificationResults[address]
             val isEventVerified = result?.success == true
 
             val inputVerificationState = when {

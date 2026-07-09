@@ -36,6 +36,9 @@ class AndroidInputDeviceRepository(
 	override fun getVerificationResult(address: BluetoothAddress): Flow<InputVerificationResult?> =
 		policyStore.policy.map { it.inputVerifications[address] }
 
+	override fun getVerificationResults(): Flow<Map<BluetoothAddress, InputVerificationResult>> =
+		policyStore.policy.map { it.inputVerifications }
+
 	override suspend fun recordVerification(address: BluetoothAddress, success: Boolean) {
 		policyStore.recordInputVerification(address, success, System.currentTimeMillis())
 	}
