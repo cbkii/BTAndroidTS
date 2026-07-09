@@ -48,20 +48,10 @@ fun AnimatedVisibilityScope.PhoneKeyboardScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_mode_title)) },
-                navigationIcon = {
-                    IconButton(onClick = { navigator.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    Button(onClick = {
-                        if(isScanning) viewModel.stopScan() else viewModel.startScan()
-                    }) {
-                        Text(if (isScanning) stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_stop_scan_btn) else stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_scan_btn))
-                    }
-                }
+            PhoneKeyboardTopBar(
+                isScanning = isScanning,
+                onBackClick = { navigator.popBackStack() },
+                onToggleScan = { if(isScanning) viewModel.stopScan() else viewModel.startScan() }
             )
         }
     ) { paddingValues ->
@@ -71,46 +61,12 @@ fun AnimatedVisibilityScope.PhoneKeyboardScreen(
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
-            var showGuide by remember { mutableStateOf(false) }
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_instructions),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = { showGuide = !showGuide }) {
-                    Text(if (showGuide) stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_hide_guide) else stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_show_guide))
-                }
-            }
-
-            if (showGuide) {
-                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guide_title), style = MaterialTheme.typography.titleMedium)
-                        com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardGuide.senderAppCompatibilityGuide.forEach { guide ->
-                            Text("• ${guide.name}", style = MaterialTheme.typography.titleSmall)
-                            Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guide_transport, guide.expectedTransport), style = MaterialTheme.typography.bodySmall)
-                            Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guide_setup, guide.setupInstructions), style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
+            PhoneKeyboardInstructions()
 
             Spacer(modifier = Modifier.height(8.dp))
 
             if (candidates.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    if (isScanning) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_scanning_text))
-                        }
-                    } else {
-                        Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_tap_scan_text))
-                    }
-                }
+                PhoneKeyboardEmptyState(isScanning = isScanning)
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -124,6 +80,72 @@ fun AnimatedVisibilityScope.PhoneKeyboardScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PhoneKeyboardTopBar(
+    isScanning: Boolean,
+    onBackClick: () -> Unit,
+    onToggleScan: () -> Unit
+) {
+    TopAppBar(
+        title = { Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_mode_title)) },
+        navigationIcon = {
+            IconButton(onClick = onBackClick) {
+                Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
+            }
+        },
+        actions = {
+            Button(onClick = onToggleScan) {
+                Text(if (isScanning) stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_stop_scan_btn) else stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_scan_btn))
+            }
+        }
+    )
+}
+
+@Composable
+fun PhoneKeyboardInstructions() {
+    var showGuide by remember { mutableStateOf(false) }
+
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_instructions),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = { showGuide = !showGuide }) {
+            Text(if (showGuide) stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_hide_guide) else stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_show_guide))
+        }
+    }
+
+    if (showGuide) {
+        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guide_title), style = MaterialTheme.typography.titleMedium)
+                com.cbkii.btandroidts.domain.phone_keyboard.PhoneKeyboardGuide.senderAppCompatibilityGuide.forEach { guide ->
+                    Text("• ${guide.name}", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guide_transport, guide.expectedTransport), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_guide_setup, guide.setupInstructions), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PhoneKeyboardEmptyState(isScanning: Boolean) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (isScanning) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_scanning_text))
+            }
+        } else {
+            Text(stringResource(com.cbkii.btandroidts.R.string.phone_keyboard_tap_scan_text))
         }
     }
 }
