@@ -34,23 +34,29 @@ package no.nordicsemi.kotlin.ble.client.internal
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * This mutex ensures that only one Bluetooth LE operation can be executed concurrently.
  */
 object OperationMutex {
-    private val lock = Mutex(locked = false)
+    private val locks = ConcurrentHashMap<String, Mutex>()
+
+    private fun getLock(identifier: String): Mutex {
+        return locks.getOrPut(identifier) { Mutex(locked = false) }
+    }
 
     /**
      * Executes the given action under this mutex's lock.
      *
+     * @param identifier - The device identifier (e.g. MAC address).
      * @param owner - Optional owner token for debugging. When owner is specified (non-null value)
      * and this mutex is already locked with the same token (same identity),
      * this function throws [IllegalStateException].
      * @param block - The action to execute under the mutex's lock
      */
-    suspend fun <T> withLock(owner: Any? = null, block: suspend () -> T): T {
-        return lock.withLock(owner) { block() }
+    suspend fun <T> withLock(identifier: String, owner: Any? = null, block: suspend () -> T): T {
+        return getLock(identifier).withLock(owner) { block() }
     }
 
     /**
@@ -61,8 +67,8 @@ object OperationMutex {
      * while this suspending function is waiting, this function immediately resumes with
      * [CancellationException].
      */
-    suspend fun lock(owner: Any? = null) {
-        lock.lock(owner)
+    suspend fun lock(identifier: String, owner: Any? = null) {
+        getLock(identifier).lock(owner)
     }
 
     /**
@@ -71,17 +77,18 @@ object OperationMutex {
      * Throws [IllegalStateException] if invoked on a mutex that is not locked or was locked with
      * a different owner token (by identity).
      */
-    fun unlock(owner: Any? = null) {
-        lock.unlock(owner)
+    fun unlock(identifier: String, owner: Any? = null) {
+        getLock(identifier).unlock(owner)
     }
 
     /**
      * Checks whether this mutex is locked by the specified owner.
      *
+     * @param identifier - The device identifier (e.g. MAC address).
      * @param owner - The owner token to check.
      * @return `true` if this mutex is locked by the given owner.
      */
-    fun holdsLock(owner: Any): Boolean {
-        return lock.holdsLock(owner)
+    fun holdsLock(identifier: String, owner: Any): Boolean {
+        return getLock(identifier).holdsLock(owner)
     }
 }

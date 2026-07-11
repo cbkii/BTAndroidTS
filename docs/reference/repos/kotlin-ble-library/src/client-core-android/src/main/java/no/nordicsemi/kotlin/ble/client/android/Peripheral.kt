@@ -476,7 +476,7 @@ open class Peripheral(
         check(isConnected) {
             throw PeripheralNotConnectedException()
         }
-        return OperationMutex.withLock {
+        return OperationMutex.withLock(identifier) {
             logger?.trace(Layer.PHY) { "Reading PHY" }
             impl.events
                 .onSubscription {
@@ -519,7 +519,7 @@ open class Peripheral(
         check(isConnected) {
             throw PeripheralNotConnectedException()
         }
-        return OperationMutex.withLock {
+        return OperationMutex.withLock(identifier) {
             logger?.trace(Layer.PHY) { "Setting preferred PHY: tx=$txPhy, rx=$rxPhy, options=$phyOptions" }
             impl.events
                 .onSubscription {
@@ -596,7 +596,7 @@ open class Peripheral(
             return
         }
         mtuRequested = true
-        val _ = OperationMutex.withLock {
+        val _ = OperationMutex.withLock(identifier) {
             logger?.trace(Layer.GATT) { "Requesting MTU: $ATT_MTU_MAX" }
             impl.events
                 .onSubscription {
@@ -633,7 +633,7 @@ open class Peripheral(
         check(isConnected) {
             throw PeripheralNotConnectedException()
         }
-        return OperationMutex.withLock {
+        return OperationMutex.withLock(identifier) {
             logger?.trace(Layer.LINK) { "Requesting connection priority: $priority" }
             impl.events
                 .onSubscription {
@@ -698,7 +698,7 @@ open class Peripheral(
             logger?.warn(Layer.GATT) { "Reliable write not in progress, nothing to execute" }
             return
         }
-        OperationMutex.withLock {
+        OperationMutex.withLock(identifier) {
             logger?.trace(Layer.GATT) { "Executing reliable write" }
             impl.events
                 .onSubscription {
@@ -740,7 +740,7 @@ open class Peripheral(
             logger?.warn(Layer.GATT) { "Reliable write not in progress, nothing to abort" }
             return
         }
-        OperationMutex.withLock {
+        OperationMutex.withLock(identifier) {
             logger?.trace(Layer.GATT) { "Aborting reliable write" }
             impl.events
                 .onSubscription {
@@ -789,7 +789,7 @@ open class Peripheral(
         check(!impl.isClosed) {
             throw PeripheralClosedException()
         }
-        val _ = OperationMutex.withLock {
+        val _ = OperationMutex.withLock(identifier) {
             logger?.trace(Layer.GATT) { "Refreshing cache" }
             impl.events
                 .onSubscription {
@@ -814,7 +814,7 @@ open class Peripheral(
         if (hasBondInformation) {
             return
         }
-        val _ = OperationMutex.withLock {
+        val _ = OperationMutex.withLock(identifier) {
             logger?.trace(Layer.SMP) { "Creating bond" }
             impl.bondState
                 .onSubscription {
@@ -852,7 +852,7 @@ open class Peripheral(
         if (!hasBondInformation) {
             return
         }
-        val _ = OperationMutex.withLock {
+        val _ = OperationMutex.withLock(identifier) {
             logger?.trace(Layer.SMP) { "Removing bond information" }
             impl.bondState
                 .onSubscription {

@@ -168,7 +168,7 @@ abstract class BaseRemoteCharacteristic(
         }
 
         // Read the characteristic value and await the result.
-        return OperationMutex.withLock {
+        return OperationMutex.withLock(owner?.identifier?.toString() ?: "") {
             events
                 .onSubscription {
                     try {
@@ -218,7 +218,7 @@ abstract class BaseRemoteCharacteristic(
         }
 
         // Write the characteristic value and await the result.
-        OperationMutex.withLock {
+        OperationMutex.withLock(owner?.identifier?.toString() ?: "") {
             events
                 .onSubscription {
                     try {

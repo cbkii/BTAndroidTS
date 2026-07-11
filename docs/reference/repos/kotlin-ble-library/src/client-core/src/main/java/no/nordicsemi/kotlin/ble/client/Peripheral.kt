@@ -354,9 +354,9 @@ abstract class Peripheral<ID: Any, EX: Peripheral.Executor<ID>>(
         _services.value.invalidate()
         _services.update { RemoteServices.Unknown }
         servicesDiscovered = false
-        if (OperationMutex.holdsLock(ServicesChanged)) {
+        if (OperationMutex.holdsLock(identifier.toString(), ServicesChanged)) {
             try {
-                OperationMutex.unlock(ServicesChanged)
+                OperationMutex.unlock(identifier.toString(), ServicesChanged)
             } catch (e: IllegalStateException) {
                 logger?.warn(Layer.GATT, e)
             }
@@ -407,7 +407,7 @@ abstract class Peripheral<ID: Any, EX: Peripheral.Executor<ID>>(
             is ServicesDiscovered -> {
                 try {
                     // Unlocks the lock locked in `discoverServices` below.
-                    OperationMutex.unlock(ServicesChanged)
+                    OperationMutex.unlock(identifier.toString(), ServicesChanged)
                 } catch (e: IllegalStateException) {
                     logger?.warn(Layer.GAP, e)
                 }
@@ -455,7 +455,7 @@ abstract class Peripheral<ID: Any, EX: Peripheral.Executor<ID>>(
             is ServiceDiscoveryFailed -> {
                 try {
                     // Unlocks the lock locked in `discoverServices` below.
-                    OperationMutex.unlock(ServicesChanged)
+                    OperationMutex.unlock(identifier.toString(), ServicesChanged)
                 } catch (e: IllegalStateException) {
                     logger?.warn(Layer.GATT, e)
                 }
@@ -493,7 +493,7 @@ abstract class Peripheral<ID: Any, EX: Peripheral.Executor<ID>>(
                     // callback before another one can be triggered. Otherwise, some callbacks
                     // aren't called at all. I.e. discovering services while also requesting HIGH
                     // connection priority makes only one of them to complete.
-                    OperationMutex.lock(ServicesChanged)
+                    OperationMutex.lock(identifier.toString(), ServicesChanged)
                 } catch (e: IllegalStateException) {
                     logger?.warn(Layer.GATT, e)
                 }
@@ -1437,7 +1437,7 @@ abstract class Peripheral<ID: Any, EX: Peripheral.Executor<ID>>(
         check (isConnected) {
             throw PeripheralNotConnectedException()
         }
-        return OperationMutex.withLock {
+        return OperationMutex.withLock(identifier.toString()) {
             logger?.trace(Layer.LINK) { "Reading RSSI" }
             impl.events
                 .onSubscription {
@@ -1482,7 +1482,7 @@ abstract class Peripheral<ID: Any, EX: Peripheral.Executor<ID>>(
      * when disconnection was initiated by the user.
      */
     internal suspend fun disconnect(reason: ConnectionState.Disconnected.Reason) = withContext(NonCancellable) {
-        OperationMutex.withLock {
+        OperationMutex.withLock(identifier.toString()) {
             // Depending on the state...
             when (state.value) {
                 is ConnectionState.Disconnected -> {

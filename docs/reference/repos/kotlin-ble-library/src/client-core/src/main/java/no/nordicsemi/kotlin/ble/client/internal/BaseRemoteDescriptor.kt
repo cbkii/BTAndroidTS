@@ -119,7 +119,7 @@ abstract class BaseRemoteDescriptor(
             throw OperationFailedException(OperationStatus.ReadNotPermitted)
         }
 
-        return OperationMutex.withLock {
+        return OperationMutex.withLock(owner?.identifier?.toString() ?: "") {
             events
                 .onSubscription {
                     try {
@@ -168,7 +168,7 @@ abstract class BaseRemoteDescriptor(
             throw OperationFailedException(OperationStatus.WriteNotPermitted)
         }
 
-        OperationMutex.withLock {
+        OperationMutex.withLock(owner?.identifier?.toString() ?: "") {
             events
                 .onSubscription {
                     try {
