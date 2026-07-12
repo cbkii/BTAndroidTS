@@ -37,13 +37,17 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * This mutex ensures that only one Bluetooth LE operation can be executed concurrently.
+ * Serializes Bluetooth LE operations per device identifier while allowing operations for distinct
+ * devices to proceed independently.
  */
 object OperationMutex {
     private val locks = ConcurrentHashMap<String, Mutex>()
 
     private fun getLock(identifier: String): Mutex {
-        return locks.getOrPut(identifier) { Mutex(locked = false) }
+        locks[identifier]?.let { return it }
+
+        val candidate = Mutex(locked = false)
+        return locks.putIfAbsent(identifier, candidate) ?: candidate
     }
 
     /**
@@ -89,6 +93,6 @@ object OperationMutex {
      * @return `true` if this mutex is locked by the given owner.
      */
     fun holdsLock(identifier: String, owner: Any): Boolean {
-        return getLock(identifier).holdsLock(owner)
+        return locks[identifier]?.holdsLock(owner) == true
     }
 }
