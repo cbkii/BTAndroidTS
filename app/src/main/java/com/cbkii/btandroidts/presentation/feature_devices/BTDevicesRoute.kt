@@ -134,41 +134,88 @@ fun BTDevicesRoute(
 			.padding(top = dimensionResource(R.dimen.ts18_status_bar_height))
 			.padding(end = dimensionResource(R.dimen.ts18_nav_bar_width)),
 	) { scPadding ->
-		Row(
-			modifier = Modifier
-				.fillMaxSize()
-				.padding(scPadding)
-		) {
-			Ts18ActionSidebar(
-				collapsed = sidebarCollapsed,
-				onCollapsedChange = { sidebarCollapsed = it },
-				onAction = onDashboardAction,
-				modifier = Modifier.fillMaxHeight()
-			)
+		BTDevicesContent(
+			isBTActive = isBTActive,
+			isScanning = isScanning,
+			hasBtPermission = hasBtPermission,
+			onBTPermissionChanged = { isGranted ->
+				hasBtPermission = isGranted
+				onEvent(BTDevicesScreenEvents.OnBTPermissionChanged(isGranted))
+			},
+			hasLocationPermission = hasLocationPermission,
+			onLocationPermissionChanged = { isGranted ->
+				hasLocationPermission = isGranted
+				onEvent(BTDevicesScreenEvents.OnLocationPermissionChanged(isGranted))
+			},
+			onLeLocationPermissionChanged = { isAccepted ->
+				hasLocationPermission = isAccepted
+			},
+			showLocationBlock = showLocationBlock,
+			sidebarCollapsed = sidebarCollapsed,
+			onSidebarCollapsedChange = { sidebarCollapsed = it },
+			state = state,
+			initialTab = initialTab,
+			onCurrentTabChanged = { type ->
+				currentTab = type
+				onEvent(BTDevicesScreenEvents.OnStopAnyRunningScan)
+			},
+			onSelectDevice = onSelectDevice,
+			onSelectLeDevice = onSelectLeDevice,
+			onDashboardAction = onDashboardAction,
+			scPadding = scPadding
+		)
+	}
+}
 
-			Column(
+@Composable
+private fun BTDevicesContent(
+	isBTActive: Boolean,
+	isScanning: Boolean,
+	hasBtPermission: Boolean,
+	onBTPermissionChanged: (Boolean) -> Unit,
+	hasLocationPermission: Boolean,
+	onLocationPermissionChanged: (Boolean) -> Unit,
+	onLeLocationPermissionChanged: (Boolean) -> Unit,
+	showLocationBlock: Boolean,
+	sidebarCollapsed: Boolean,
+	onSidebarCollapsedChange: (Boolean) -> Unit,
+	state: BTDevicesScreenState,
+	initialTab: BluetoothTypes,
+	onCurrentTabChanged: (BluetoothTypes) -> Unit,
+	onSelectDevice: (BluetoothDeviceModel) -> Unit,
+	onSelectLeDevice: (BluetoothLEDeviceModel) -> Unit,
+	onDashboardAction: (Ts18DashboardAction) -> Unit,
+	scPadding: PaddingValues,
+) {
+	Row(
+		modifier = Modifier
+			.fillMaxSize()
+			.padding(scPadding)
+	) {
+		Ts18ActionSidebar(
+			collapsed = sidebarCollapsed,
+			onCollapsedChange = onSidebarCollapsedChange,
+			onAction = onDashboardAction,
+			modifier = Modifier.fillMaxHeight()
+		)
+
+		Column(
+			modifier = Modifier
+				.weight(1f)
+				.fillMaxHeight()
+		) {
+			DevicesScreenModeContainer(
+				isActive = isBTActive,
+				hasPermission = hasBtPermission,
+				onBTPermissionChanged = onBTPermissionChanged,
 				modifier = Modifier
+					.fillMaxWidth()
 					.weight(1f)
-					.fillMaxHeight()
 			) {
-				DevicesScreenModeContainer(
-					isActive = isBTActive,
-					hasPermission = hasBtPermission,
-					onBTPermissionChanged = { isGranted ->
-						hasBtPermission = isGranted
-						onEvent(BTDevicesScreenEvents.OnBTPermissionChanged(isGranted))
-					},
-					modifier = Modifier
-						.fillMaxWidth()
-						.weight(1f)
-				) {
-					BTDevicesTabsLayout(
+				BTDevicesTabsLayout(
 					isScanning = isScanning,
 					initialTab = initialTab,
-					onCurrentTabChanged = { type ->
-						currentTab = type
-						onEvent(BTDevicesScreenEvents.OnStopAnyRunningScan)
-					},
+					onCurrentTabChanged = onCurrentTabChanged,
 					modifier = Modifier.fillMaxSize(),
 					classicTabContent = {
 						BluetoothDevicesList(
@@ -179,10 +226,7 @@ fun BTDevicesRoute(
 							showLocationPlaceholder = showLocationBlock,
 							onSelectDevice = onSelectDevice,
 							contentPadding = PaddingValues(all = dimensionResource(R.dimen.sc_padding)),
-							onLocationPermsAccept = { isGranted ->
-								hasLocationPermission = isGranted
-								onEvent(BTDevicesScreenEvents.OnLocationPermissionChanged(isGranted))
-							},
+							onLocationPermsAccept = onLocationPermissionChanged,
 							modifier = Modifier.fillMaxSize(),
 						)
 					},
@@ -193,14 +237,11 @@ fun BTDevicesRoute(
 							leDevices = state.leDevices,
 							onDeviceSelect = onSelectLeDevice,
 							contentPadding = PaddingValues(all = dimensionResource(R.dimen.sc_padding)),
-							onLocationPermissionChanged = { isAccepted ->
-								hasLocationPermission = isAccepted
-							},
+							onLocationPermissionChanged = onLeLocationPermissionChanged,
 							modifier = Modifier.fillMaxSize(),
 						)
 					}
-					)
-				}
+				)
 			}
 		}
 	}
