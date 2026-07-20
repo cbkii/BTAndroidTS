@@ -84,6 +84,9 @@ class AndroidBLEClientConnector(
 	private var lastAddress: String? = null
 	private var lastAutoConnect: Boolean = false
 
+	@Volatile
+	private var disconnectRequested: Boolean = false
+
 	override val connectionState: StateFlow<BLEConnectionState>
 		get() = gattCallback.connectionState
 
@@ -120,6 +123,7 @@ class AndroidBLEClientConnector(
 			connectedDeviceValue?.address == address && connectedTransport() != null
 		) return Result.success(true)
 
+		disconnectRequested = false
 		lastAddress = address
 		lastAutoConnect = autoConnect
 		var candidate: AndroidGattTransport? = null
@@ -287,10 +291,19 @@ class AndroidBLEClientConnector(
 			value = descriptorValue,
 		)
 		if (writeResult.isFailure) {
-			current.setCharacteristicNotification(gattCharacteristic, !enable)
+			if (!disconnectRequested && sessionGate.isActive(current.sessionToken)) {
+				runCatching {
+					current.setCharacteristicNotification(gattCharacteristic, !enable)
+				}.onFailure { error ->
+					Log.w(TAG, "Failed to roll back local notification state", error)
+				}
+			}
 			return@withLock writeResult
 		}
 
+		if (connectedTransport() !== current) {
+			return@withLock Result.failure(GattOperationException.SessionDisconnected())
+		}
 		activeNotificationKey = if (enable) key else null
 		notifyOrIndicationRunning.value = enable
 		Result.success(true)
@@ -347,6 +360,7 @@ class AndroidBLEClientConnector(
 				return@withLock Result.success(Unit)
 			}
 
+			disconnectRequested = true
 			try {
 				operationQueue.failActiveAndPending(GattOperationException.SessionDisconnected())
 				activeNotificationKey = null
@@ -370,6 +384,7 @@ class AndroidBLEClientConnector(
 	}
 
 	override fun close() {
+		disconnectRequested = true
 		operationQueue.close()
 		activeNotificationKey = null
 		notifyOrIndicationRunning.value = false
@@ -398,7 +413,8 @@ class AndroidBLEClientConnector(
 
 	private fun connectedTransport(): AndroidGattTransport? {
 		return transport?.takeIf { current ->
-			connectionState.value == BLEConnectionState.CONNECTED &&
+			!disconnectRequested &&
+				connectionState.value == BLEConnectionState.CONNECTED &&
 				sessionGate.isActive(current.sessionToken)
 		}
 	}
@@ -440,6 +456,7 @@ class AndroidBLEClientConnector(
 		operationQueue.close(GattOperationException.SessionDisconnected())
 		retireAndCloseTransport(current)
 		if (transport === current) transport = null
+		disconnectRequested = false
 		activeNotificationKey = null
 		notifyOrIndicationRunning.value = false
 	}
@@ -449,6 +466,7 @@ class AndroidBLEClientConnector(
 		gattCallback.markSessionFailed()
 		retireAndCloseTransport(current)
 		if (transport === current) transport = null
+		disconnectRequested = false
 		connectedDeviceValue = null
 		activeNotificationKey = null
 		notifyOrIndicationRunning.value = false
