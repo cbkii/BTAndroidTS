@@ -72,12 +72,15 @@ internal sealed class GattOperationException(message: String) : IllegalStateExce
  * Serializes callback-driven Android BluetoothGatt operations for one active GATT session.
  *
  * A request keeps the queue until its matching callback, an immediate native start rejection,
- * a timeout, a disconnect, or queue closure. Callbacks from an earlier GATT instance are ignored.
+ * callback failure, timeout, disconnect, or queue closure. A timeout invalidates the queue because
+ * Android callbacks carry no request identifier and a late callback could otherwise complete a
+ * later operation with the same type and attribute key.
  */
 internal class GattOperationQueue(
 	private val scope: CoroutineScope,
 	private val defaultTimeoutMs: Long = DEFAULT_OPERATION_TIMEOUT_MS,
 	capacity: Int = DEFAULT_QUEUE_CAPACITY,
+	private val onSessionInvalidated: (sessionToken: Any, cause: Throwable) -> Unit = { _, _ -> },
 ) {
 	private data class Request(
 		val name: String,
@@ -156,18 +159,11 @@ internal class GattOperationQueue(
 
 	fun failActiveAndPending(cause: Throwable) {
 		activeRequest?.completion?.complete(Result.failure(cause))
-		while (true) {
-			val pending = requests.tryReceive().getOrNull() ?: break
-			pending.completion.complete(Result.failure(cause))
-		}
+		drainPending(cause)
 	}
 
 	fun close(cause: Throwable = GattOperationException.QueueClosed()) {
-		if (!closed.compareAndSet(false, true)) return
-
-		sessionToken = null
-		requests.close()
-		failActiveAndPending(cause)
+		if (!closeInternal(cause, notifyInvalidation = false)) return
 		worker.cancel(cause.message ?: "GATT queue closed", cause)
 	}
 
@@ -203,13 +199,35 @@ internal class GattOperationQueue(
 				} ?: false
 
 				if (!completed) {
-					request.completion.complete(
-						Result.failure(GattOperationException.TimedOut(request.name, request.timeoutMs))
-					)
+					val failure = GattOperationException.TimedOut(request.name, request.timeoutMs)
+					request.completion.complete(Result.failure(failure))
+					closeInternal(failure, notifyInvalidation = true)
 				}
 			}
 		} finally {
 			if (activeRequest === request) activeRequest = null
+		}
+	}
+
+	private fun closeInternal(cause: Throwable, notifyInvalidation: Boolean): Boolean {
+		if (!closed.compareAndSet(false, true)) return false
+
+		val token = sessionToken
+		sessionToken = null
+		requests.close()
+		activeRequest?.completion?.complete(Result.failure(cause))
+		drainPending(cause)
+
+		if (notifyInvalidation && token != null) {
+			runCatching { onSessionInvalidated(token, cause) }
+		}
+		return true
+	}
+
+	private fun drainPending(cause: Throwable) {
+		while (true) {
+			val pending = requests.tryReceive().getOrNull() ?: break
+			pending.completion.complete(Result.failure(cause))
 		}
 	}
 
