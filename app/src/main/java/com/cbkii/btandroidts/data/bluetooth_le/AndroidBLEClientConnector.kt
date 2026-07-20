@@ -167,16 +167,21 @@ class AndroidBLEClientConnector(
 		return try {
 			gattCallback.prepareForConnection()
 			if (!current.reconnect()) {
-				return Result.failure(GattOperationException.StartRejected("reconnect"))
+				val failure = GattOperationException.StartRejected("reconnect")
+				releaseFailedConnection(current, failure)
+				return Result.failure(failure)
 			}
 			val state = awaitConnectionTerminalState(CONNECTION_TIMEOUT_MS)
 			if (state != BLEConnectionState.CONNECTED) {
-				Result.failure(IllegalStateException("Bluetooth GATT reconnect failed: $state"))
+				val failure = IllegalStateException("Bluetooth GATT reconnect failed: $state")
+				releaseFailedConnection(current, failure)
+				Result.failure(failure)
 			} else {
 				launchInitialOperations()
 				Result.success(true)
 			}
 		} catch (error: Exception) {
+			releaseFailedConnection(current, error)
 			if (error is CancellationException) throw error
 			Result.failure(error)
 		}
