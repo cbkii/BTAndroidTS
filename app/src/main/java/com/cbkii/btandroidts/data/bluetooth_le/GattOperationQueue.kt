@@ -10,7 +10,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 
 internal enum class GattCallbackType {
 	SERVICES_DISCOVERED,
@@ -24,6 +23,7 @@ internal enum class GattCallbackType {
 
 internal data class GattAttributeKey(
 	val serviceUuid: UUID? = null,
+	val serviceInstanceId: Int? = null,
 	val characteristicUuid: UUID? = null,
 	val descriptorUuid: UUID? = null,
 	val instanceId: Int? = null,
@@ -80,7 +80,6 @@ internal class GattOperationQueue(
 	capacity: Int = DEFAULT_QUEUE_CAPACITY,
 ) {
 	private data class Request(
-		val id: Long,
 		val name: String,
 		val sessionToken: Any,
 		val expectedCallback: ExpectedGattCallback,
@@ -90,7 +89,6 @@ internal class GattOperationQueue(
 	)
 
 	private val closed = AtomicBoolean(false)
-	private val requestIds = AtomicLong(0)
 	private val requests = Channel<Request>(capacity = capacity)
 
 	@Volatile
@@ -100,9 +98,7 @@ internal class GattOperationQueue(
 	private var activeRequest: Request? = null
 
 	private val worker: Job = scope.launch(start = CoroutineStart.UNDISPATCHED) {
-		for (request in requests) {
-			process(request)
-		}
+		for (request in requests) process(request)
 	}
 
 	fun attachSession(token: Any) {
@@ -125,7 +121,6 @@ internal class GattOperationQueue(
 		val token = sessionToken ?: return Result.failure(GattOperationException.NoActiveSession())
 
 		val request = Request(
-			id = requestIds.incrementAndGet(),
 			name = name,
 			sessionToken = token,
 			expectedCallback = expectedCallback,
