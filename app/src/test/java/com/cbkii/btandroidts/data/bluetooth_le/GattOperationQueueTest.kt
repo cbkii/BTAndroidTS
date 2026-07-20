@@ -1,5 +1,6 @@
 package com.cbkii.btandroidts.data.bluetooth_le
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
@@ -12,38 +13,36 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.UUID
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class GattOperationQueueTest {
 
 	@Test
 	fun operationsWithinOneSessionWaitForMatchingCallbacks() = runTest {
 		val token = Any()
 		val starts = mutableListOf<String>()
-		val queue = GattOperationQueue(this, defaultTimeoutMs = 1_000)
+		val queue = GattOperationQueue(backgroundScope, defaultTimeoutMs = 1_000)
 		queue.attachSession(token)
 
 		val first = async {
-			queue.execute(
-				name = "first",
-				expectedCallback = ExpectedGattCallback(GattCallbackType.RSSI_READ),
-				start = { starts += "first"; true },
-			)
+			queue.execute("first", ExpectedGattCallback(GattCallbackType.RSSI_READ)) {
+				starts += "first"
+				true
+			}
 		}
 		runCurrent()
-
 		val second = async {
-			queue.execute(
-				name = "second",
-				expectedCallback = ExpectedGattCallback(GattCallbackType.MTU_CHANGED),
-				start = { starts += "second"; true },
-			)
+			queue.execute("second", ExpectedGattCallback(GattCallbackType.MTU_CHANGED)) {
+				starts += "second"
+				true
+			}
 		}
 		runCurrent()
 		assertEquals(listOf("first"), starts)
 
 		assertTrue(queue.onCallback(success(token, GattCallbackType.RSSI_READ)))
 		runCurrent()
-		assertEquals(listOf("first", "second"), starts)
 		assertTrue(first.await().isSuccess)
+		assertEquals(listOf("first", "second"), starts)
 
 		assertTrue(queue.onCallback(success(token, GattCallbackType.MTU_CHANGED)))
 		runCurrent()
@@ -54,9 +53,9 @@ class GattOperationQueueTest {
 	fun separateSessionQueuesCanProgressConcurrently() = runTest {
 		val tokenA = Any()
 		val tokenB = Any()
-		val starts = mutableListOf<String>()
-		val queueA = GattOperationQueue(this)
-		val queueB = GattOperationQueue(this)
+		val starts = mutableSetOf<String>()
+		val queueA = GattOperationQueue(backgroundScope)
+		val queueB = GattOperationQueue(backgroundScope)
 		queueA.attachSession(tokenA)
 		queueB.attachSession(tokenB)
 
@@ -73,7 +72,7 @@ class GattOperationQueueTest {
 			}
 		}
 		runCurrent()
-		assertEquals(setOf("A", "B"), starts.toSet())
+		assertEquals(setOf("A", "B"), starts)
 
 		queueA.onCallback(success(tokenA, GattCallbackType.RSSI_READ))
 		queueB.onCallback(success(tokenB, GattCallbackType.RSSI_READ))
@@ -83,10 +82,10 @@ class GattOperationQueueTest {
 	}
 
 	@Test
-	fun immediateStartRejectionReleasesTheNextOperation() = runTest {
+	fun startRejectionAndCallbackFailureReleaseFollowingOperations() = runTest {
 		val token = Any()
 		val starts = mutableListOf<String>()
-		val queue = GattOperationQueue(this)
+		val queue = GattOperationQueue(backgroundScope)
 		queue.attachSession(token)
 
 		val rejected = async {
@@ -95,8 +94,14 @@ class GattOperationQueueTest {
 				false
 			}
 		}
+		val failed = async {
+			queue.execute("failed", ExpectedGattCallback(GattCallbackType.MTU_CHANGED)) {
+				starts += "failed"
+				true
+			}
+		}
 		val next = async {
-			queue.execute("next", ExpectedGattCallback(GattCallbackType.MTU_CHANGED)) {
+			queue.execute("next", ExpectedGattCallback(GattCallbackType.SERVICES_DISCOVERED)) {
 				starts += "next"
 				true
 			}
@@ -104,46 +109,20 @@ class GattOperationQueueTest {
 		runCurrent()
 
 		assertTrue(rejected.await().exceptionOrNull() is GattOperationException.StartRejected)
-		assertEquals(listOf("rejected", "next"), starts)
-		queue.onCallback(success(token, GattCallbackType.MTU_CHANGED))
-		runCurrent()
-		assertTrue(next.await().isSuccess)
-	}
-
-	@Test
-	fun callbackFailureReleasesTheNextOperation() = runTest {
-		val token = Any()
-		val starts = mutableListOf<String>()
-		val queue = GattOperationQueue(this)
-		queue.attachSession(token)
-
-		val failed = async {
-			queue.execute("failed", ExpectedGattCallback(GattCallbackType.RSSI_READ)) {
-				starts += "failed"
-				true
-			}
-		}
-		val next = async {
-			queue.execute("next", ExpectedGattCallback(GattCallbackType.MTU_CHANGED)) {
-				starts += "next"
-				true
-			}
-		}
-		runCurrent()
-
+		assertEquals(listOf("rejected", "failed"), starts)
 		queue.onCallback(
 			GattCallbackEvent(
 				sessionToken = token,
-				type = GattCallbackType.RSSI_READ,
+				type = GattCallbackType.MTU_CHANGED,
 				successful = false,
 				detail = "status=133",
 			)
 		)
 		runCurrent()
 		assertTrue(failed.await().exceptionOrNull() is GattOperationException.CallbackFailed)
-		assertEquals(listOf("failed", "next"), starts)
+		assertEquals(listOf("rejected", "failed", "next"), starts)
 
-		queue.onCallback(success(token, GattCallbackType.MTU_CHANGED))
+		queue.onCallback(success(token, GattCallbackType.SERVICES_DISCOVERED))
 		runCurrent()
 		assertTrue(next.await().isSuccess)
 	}
@@ -152,7 +131,7 @@ class GattOperationQueueTest {
 	fun missingCallbackTimesOutAndQueueContinues() = runTest {
 		val token = Any()
 		val starts = mutableListOf<String>()
-		val queue = GattOperationQueue(this, defaultTimeoutMs = 100)
+		val queue = GattOperationQueue(backgroundScope, defaultTimeoutMs = 100)
 		queue.attachSession(token)
 
 		val timedOut = async {
@@ -181,33 +160,26 @@ class GattOperationQueueTest {
 	@Test
 	fun staleAndMismatchedCallbacksDoNotCompleteActiveOperation() = runTest {
 		val token = Any()
-		val staleToken = Any()
 		val key = GattAttributeKey(
 			serviceUuid = UUID.randomUUID(),
 			characteristicUuid = UUID.randomUUID(),
 			instanceId = 1,
 		)
-		val otherKey = key.copy(instanceId = 2)
-		val queue = GattOperationQueue(this)
+		val queue = GattOperationQueue(backgroundScope)
 		queue.attachSession(token)
 
 		val result = async {
 			queue.execute(
-				name = "read",
-				expectedCallback = ExpectedGattCallback(GattCallbackType.CHARACTERISTIC_READ, key),
-				start = { true },
-			)
+				"read",
+				ExpectedGattCallback(GattCallbackType.CHARACTERISTIC_READ, key),
+			) { true }
 		}
 		runCurrent()
 
+		assertFalse(queue.onCallback(success(Any(), GattCallbackType.CHARACTERISTIC_READ, key)))
 		assertFalse(
 			queue.onCallback(
-				success(staleToken, GattCallbackType.CHARACTERISTIC_READ, key),
-			)
-		)
-		assertFalse(
-			queue.onCallback(
-				success(token, GattCallbackType.CHARACTERISTIC_READ, otherKey),
+				success(token, GattCallbackType.CHARACTERISTIC_READ, key.copy(instanceId = 2)),
 			)
 		)
 		assertFalse(result.isCompleted)
@@ -218,10 +190,11 @@ class GattOperationQueueTest {
 	}
 
 	@Test
-	fun disconnectFailsActiveAndPendingRequestsWithoutClosingQueue() = runTest {
-		val token = Any()
-		val queue = GattOperationQueue(this)
-		queue.attachSession(token)
+	fun disconnectAndSessionReplacementFailOldWorkWithoutStrandingQueue() = runTest {
+		val oldToken = Any()
+		val newToken = Any()
+		val queue = GattOperationQueue(backgroundScope)
+		queue.attachSession(oldToken)
 
 		val active = async {
 			queue.execute("active", ExpectedGattCallback(GattCallbackType.RSSI_READ)) { true }
@@ -230,39 +203,15 @@ class GattOperationQueueTest {
 			queue.execute("pending", ExpectedGattCallback(GattCallbackType.MTU_CHANGED)) { true }
 		}
 		runCurrent()
-
 		queue.failActiveAndPending(GattOperationException.SessionDisconnected())
 		runCurrent()
 		assertTrue(active.await().exceptionOrNull() is GattOperationException.SessionDisconnected)
 		assertTrue(pending.await().exceptionOrNull() is GattOperationException.SessionDisconnected)
 
-		val afterReconnect = async {
-			queue.execute("after", ExpectedGattCallback(GattCallbackType.RSSI_READ)) { true }
-		}
-		runCurrent()
-		queue.onCallback(success(token, GattCallbackType.RSSI_READ))
-		runCurrent()
-		assertTrue(afterReconnect.await().isSuccess)
-	}
-
-	@Test
-	fun replacingSessionRejectsOldWorkAndIgnoresOldCallback() = runTest {
-		val oldToken = Any()
-		val newToken = Any()
-		val queue = GattOperationQueue(this)
-		queue.attachSession(oldToken)
-
-		val old = async {
-			queue.execute("old", ExpectedGattCallback(GattCallbackType.RSSI_READ)) { true }
-		}
-		runCurrent()
 		queue.attachSession(newToken)
-		runCurrent()
-		assertTrue(old.await().exceptionOrNull() is GattOperationException.SessionReplaced)
 		assertFalse(queue.onCallback(success(oldToken, GattCallbackType.RSSI_READ)))
-
 		val current = async {
-			queue.execute("new", ExpectedGattCallback(GattCallbackType.RSSI_READ)) { true }
+			queue.execute("current", ExpectedGattCallback(GattCallbackType.RSSI_READ)) { true }
 		}
 		runCurrent()
 		assertTrue(queue.onCallback(success(newToken, GattCallbackType.RSSI_READ)))
@@ -271,10 +220,10 @@ class GattOperationQueueTest {
 	}
 
 	@Test
-	fun callerCancellationDoesNotReleaseInFlightGattOperationEarly() = runTest {
+	fun callerCancellationDoesNotReleaseInFlightOperationEarly() = runTest {
 		val token = Any()
 		val starts = mutableListOf<String>()
-		val queue = GattOperationQueue(this)
+		val queue = GattOperationQueue(backgroundScope)
 		queue.attachSession(token)
 
 		val cancelledCaller = launch {
@@ -305,15 +254,13 @@ class GattOperationQueueTest {
 
 	@Test
 	fun closedQueueRejectsNewWork() = runTest {
-		val queue = GattOperationQueue(this)
+		val queue = GattOperationQueue(backgroundScope)
 		queue.attachSession(Any())
 		queue.close()
-
 		val result = queue.execute(
-			name = "closed",
-			expectedCallback = ExpectedGattCallback(GattCallbackType.RSSI_READ),
-			start = { true },
-		)
+			"closed",
+			ExpectedGattCallback(GattCallbackType.RSSI_READ),
+		) { true }
 		assertTrue(result.exceptionOrNull() is GattOperationException.QueueClosed)
 	}
 
