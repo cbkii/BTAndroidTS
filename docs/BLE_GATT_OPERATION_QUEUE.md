@@ -12,14 +12,15 @@
 1. A connector permits one callback-driven GATT operation in flight at a time.
 2. The queue remains held until the expected callback, native start rejection, callback failure, timeout, disconnect, session replacement or closure.
 3. Independent connector instances use independent queues and do not share a process-wide mutex.
-4. Callback matching includes the active GATT object and, for attribute operations, service UUID, characteristic UUID, characteristic instance ID and descriptor UUID where applicable.
-5. Callbacks from an earlier GATT object cannot complete work in the current session.
-6. Disconnect fails active and pending work before invoking the native disconnect operation, so teardown is not queued behind a stranded request.
-7. Queue capacity and operation waits are bounded.
+4. Callback matching includes the active GATT object and, for attribute operations, service UUID, service instance ID, characteristic UUID, characteristic instance ID and descriptor UUID where applicable.
+5. A bounded identity gate rejects callbacks from recently retired GATT objects, including callbacks arriving after a replacement connection has started.
+6. Disconnect fails active and pending work before invoking the native disconnect operation, then retires and closes the disconnected GATT object.
+7. Reconnect creates a fresh GATT object and queue so callbacks from the disconnected session cannot satisfy new operations.
+8. Queue capacity and operation waits are bounded.
 
 ## Notification and indication transaction
 
-Notification or indication setup is treated as a composite transaction:
+Notification or indication setup is treated as a serialized composite transaction:
 
 1. validate properties and CCCD presence;
 2. apply local `setCharacteristicNotification` state;
@@ -28,13 +29,21 @@ Notification or indication setup is treated as a composite transaction:
 5. expose the active state only after callback success;
 6. roll back the local state when the descriptor write fails or times out.
 
-The callback does not issue echo reads or other GATT requests directly. Follow-up work is submitted through the connector so it is serialized by the same session queue.
+Concurrent notification changes are protected by a connector-local mutex. The callback does not issue echo reads or other GATT requests directly. Follow-up work is submitted through the connector so it is serialized by the same session queue.
 
 ## Timeout and cancellation policy
 
-The default callback wait is 10 seconds. A timeout completes the caller with an explicit failure and releases the queue for later work. Cancelling one caller does not release the underlying in-flight Android operation early; the queue still waits for its callback or timeout so a later operation cannot overlap it.
+The default callback wait is 10 seconds. Android callbacks do not contain an application request identifier, so a callback arriving after a timeout cannot be safely distinguished from the callback for a later identical request. A timeout therefore:
 
-Connection and disconnect waits use separate bounded timeouts. Closing the connector permanently closes its queue and rejects later requests.
+1. fails the active and pending operations;
+2. closes the operation queue;
+3. marks the connection failed;
+4. retires and closes the GATT object;
+5. requires a fresh connection before more GATT work.
+
+Cancelling one caller does not release an already-started Android operation early. The queue still waits for its callback or timeout, preventing the following request from overlapping it.
+
+Connection and disconnect waits use separate bounded timeouts. A failed connection or disconnect also closes its GATT object. Closing the connector permanently closes its queue and rejects later requests.
 
 ## Validation
 
