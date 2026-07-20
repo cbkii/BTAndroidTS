@@ -35,9 +35,10 @@ import kotlinx.coroutines.launch
 private const val GATT_LOGGER = "BLE_GATT_CALLBACK"
 
 @SuppressLint("MissingPermission")
-class BLEClientGattCallback(
+internal class BLEClientGattCallback(
 	private val reader: SampleUUIDReader,
 	private val operationQueue: () -> GattOperationQueue,
+	private val sessionGate: GattSessionGate,
 	private val onServiceChanged: () -> Unit,
 	private val scope: CoroutineScope = CoroutineScope(SupervisorJob()),
 ) : BluetoothGattCallback() {
@@ -69,13 +70,15 @@ class BLEClientGattCallback(
 	}
 
 	override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
-		if (gatt == null) return
+		if (gatt == null || !acceptSession(gatt, "connection state")) return
+
 		if (status != BluetoothGatt.GATT_SUCCESS) {
 			operationQueue().failActiveAndPending(
 				GattOperationException.CallbackFailed("connection", "status=$status"),
 			)
 			_connectionState.value = BLEConnectionState.FAILED
 			Log.e(GATT_LOGGER, "Connection failed with status=$status")
+			sessionGate.retire(gatt)
 			gatt.close()
 			return
 		}
@@ -90,49 +93,50 @@ class BLEClientGattCallback(
 		_connectionState.value = state
 		Log.d(GATT_LOGGER, "New connection state: $state")
 
-		if (state == BLEConnectionState.DISCONNECTED) {
+		if (state == BLEConnectionState.DISCONNECTED || state == BLEConnectionState.FAILED) {
 			operationQueue().failActiveAndPending(GattOperationException.SessionDisconnected())
 		}
 	}
 
 	override fun onReadRemoteRssi(gatt: BluetoothGatt?, rssi: Int, status: Int) {
-		if (gatt == null) return
-		complete(gatt, GattCallbackType.RSSI_READ, status = status)
+		if (gatt == null || !acceptSession(gatt, "RSSI")) return
 		if (status == BluetoothGatt.GATT_SUCCESS) {
 			_events.tryEmit(BLEConnectionEvents.OnRSSIUpdated(rssi))
 		}
+		complete(gatt, GattCallbackType.RSSI_READ, status = status)
 	}
 
 	override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
-		if (gatt == null) return
-		complete(gatt, GattCallbackType.MTU_CHANGED, status = status)
+		if (gatt == null || !acceptSession(gatt, "MTU")) return
 		if (status == BluetoothGatt.GATT_SUCCESS) {
 			_events.tryEmit(BLEConnectionEvents.OnMTUUpdated(mtu))
 		}
+		complete(gatt, GattCallbackType.MTU_CHANGED, status = status)
 	}
 
 	override fun onPhyRead(gatt: BluetoothGatt?, txPhy: Int, rxPhy: Int, status: Int) {
+		if (gatt == null || !acceptSession(gatt, "PHY read")) return
 		if (status != BluetoothGatt.GATT_SUCCESS) return
 		Log.d(GATT_LOGGER, "PHY read tx=$txPhy rx=$rxPhy")
 	}
 
 	override fun onPhyUpdate(gatt: BluetoothGatt?, txPhy: Int, rxPhy: Int, status: Int) {
+		if (gatt == null || !acceptSession(gatt, "PHY update")) return
 		if (status != BluetoothGatt.GATT_SUCCESS) return
-		val txChannel = txPhy.toBLPhy()
-		val rxChannel = rxPhy.toBLPhy()
-		_events.tryEmit(BLEConnectionEvents.OnPhyUpdated(txChannel, rxChannel))
+		_events.tryEmit(BLEConnectionEvents.OnPhyUpdated(txPhy.toBLPhy(), rxPhy.toBLPhy()))
 	}
 
 	override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
-		if (gatt == null) return
-		complete(gatt, GattCallbackType.SERVICES_DISCOVERED, status = status)
+		if (gatt == null || !acceptSession(gatt, "service discovery")) return
 		if (status == BluetoothGatt.GATT_SUCCESS) {
 			_bleGattServices.value = gatt.services.orEmpty()
 			Log.d(GATT_LOGGER, "Services discovered: ${gatt.services.size}")
 		}
+		complete(gatt, GattCallbackType.SERVICES_DISCOVERED, status = status)
 	}
 
 	override fun onServiceChanged(gatt: BluetoothGatt) {
+		if (!acceptSession(gatt, "service changed")) return
 		Log.d(GATT_LOGGER, "Services changed; queueing rediscovery")
 		onServiceChanged()
 	}
@@ -155,13 +159,12 @@ class BLEClientGattCallback(
 		value: ByteArray,
 		status: Int,
 	) {
-		complete(
-			gatt = gatt,
-			type = GattCallbackType.CHARACTERISTIC_READ,
-			key = characteristic.operationKey(),
-			status = status,
-		)
-		if (status != BluetoothGatt.GATT_SUCCESS) return
+		if (!acceptSession(gatt, "characteristic read")) return
+		val key = characteristic.operationKey()
+		if (status != BluetoothGatt.GATT_SUCCESS) {
+			complete(gatt, GattCallbackType.CHARACTERISTIC_READ, status, key)
+			return
+		}
 
 		scope.launch {
 			try {
@@ -175,9 +178,11 @@ class BLEClientGattCallback(
 						domainModel
 					}
 				}
+				complete(gatt, GattCallbackType.CHARACTERISTIC_READ, status, key)
 			} catch (error: Exception) {
 				if (error is CancellationException) throw error
 				Log.e(GATT_LOGGER, "Failed to map characteristic read", error)
+				completeFailure(gatt, GattCallbackType.CHARACTERISTIC_READ, key, error)
 			}
 		}
 	}
@@ -187,7 +192,9 @@ class BLEClientGattCallback(
 		characteristic: BluetoothGattCharacteristic?,
 		status: Int,
 	) {
-		if (gatt == null || characteristic == null) return
+		if (gatt == null || characteristic == null ||
+			!acceptSession(gatt, "characteristic write")
+		) return
 		complete(
 			gatt = gatt,
 			type = GattCallbackType.CHARACTERISTIC_WRITE,
@@ -214,31 +221,33 @@ class BLEClientGattCallback(
 		status: Int,
 		value: ByteArray,
 	) {
-		complete(
-			gatt = gatt,
-			type = GattCallbackType.DESCRIPTOR_READ,
-			key = descriptor.operationKey(),
-			status = status,
-		)
-		if (status != BluetoothGatt.GATT_SUCCESS) return
+		if (!acceptSession(gatt, "descriptor read")) return
+		val key = descriptor.operationKey()
+		if (status != BluetoothGatt.GATT_SUCCESS) {
+			complete(gatt, GattCallbackType.DESCRIPTOR_READ, status, key)
+			return
+		}
 
 		scope.launch {
 			try {
-				val characteristic = _readCharacteristic.value ?: return@launch
-				if (descriptor.characteristic.uuid != characteristic.uuid ||
-				descriptor.characteristic.instanceId != characteristic.instanceId
-				) return@launch
-
-				val domainModel = descriptor.toDomainModelWithName(reader).copy(byteArray = value)
-				val descriptors = characteristic.descriptors.map { current ->
-					if (current.uuid == domainModel.uuid) domainModel else current
+				val characteristic = _readCharacteristic.value
+				if (characteristic != null &&
+					descriptor.characteristic.uuid == characteristic.uuid &&
+					descriptor.characteristic.instanceId == characteristic.instanceId
+				) {
+					val domainModel = descriptor.toDomainModelWithName(reader).copy(byteArray = value)
+					val descriptors = characteristic.descriptors.map { current ->
+						if (current.uuid == domainModel.uuid) domainModel else current
+					}
+					_readCharacteristic.update { current ->
+						current?.copy(descriptors = descriptors.toPersistentList())
+					}
 				}
-				_readCharacteristic.update { current ->
-					current?.copy(descriptors = descriptors.toPersistentList())
-				}
+				complete(gatt, GattCallbackType.DESCRIPTOR_READ, status, key)
 			} catch (error: Exception) {
 				if (error is CancellationException) throw error
 				Log.e(GATT_LOGGER, "Failed to map descriptor read", error)
+				completeFailure(gatt, GattCallbackType.DESCRIPTOR_READ, key, error)
 			}
 		}
 	}
@@ -248,7 +257,7 @@ class BLEClientGattCallback(
 		descriptor: BluetoothGattDescriptor?,
 		status: Int,
 	) {
-		if (gatt == null || descriptor == null) return
+		if (gatt == null || descriptor == null || !acceptSession(gatt, "descriptor write")) return
 		complete(
 			gatt = gatt,
 			type = GattCallbackType.DESCRIPTOR_WRITE,
@@ -273,6 +282,7 @@ class BLEClientGattCallback(
 		characteristic: BluetoothGattCharacteristic,
 		value: ByteArray,
 	) {
+		if (!acceptSession(gatt, "characteristic changed")) return
 		scope.launch {
 			try {
 				val current = _readCharacteristic.value
@@ -297,7 +307,9 @@ class BLEClientGattCallback(
 		characteristic: BLECharacteristicsModel,
 	): BluetoothGattCharacteristic? {
 		return bleGattServicesValue
-			.find { it.uuid == service.serviceUUID }
+			.find { candidate ->
+				candidate.uuid == service.serviceUUID && candidate.instanceId == service.serviceId
+			}
 			?.characteristics
 			?.find { candidate ->
 				candidate.uuid == characteristic.uuid &&
@@ -312,6 +324,12 @@ class BLEClientGattCallback(
 	): BluetoothGattDescriptor? {
 		return findCharacteristicFromDomainModel(service, characteristic)
 			?.getDescriptor(descriptor.uuid)
+	}
+
+	private fun acceptSession(gatt: BluetoothGatt, callback: String): Boolean {
+		val accepted = sessionGate.activate(gatt)
+		if (!accepted) Log.w(GATT_LOGGER, "Ignoring $callback callback from retired GATT session")
+		return accepted
 	}
 
 	private fun complete(
@@ -334,14 +352,34 @@ class BLEClientGattCallback(
 		}
 	}
 
+	private fun completeFailure(
+		gatt: BluetoothGatt,
+		type: GattCallbackType,
+		key: GattAttributeKey,
+		error: Throwable,
+	) {
+		val accepted = operationQueue().onCallback(
+			GattCallbackEvent(
+				sessionToken = gatt,
+				type = type,
+				key = key,
+				successful = false,
+				detail = error.message ?: error::class.java.simpleName,
+			)
+		)
+		if (!accepted) Log.w(GATT_LOGGER, "Ignoring unmatched failed callback type=$type key=$key")
+	}
+
 	private fun BluetoothGattCharacteristic.operationKey() = GattAttributeKey(
 		serviceUuid = service?.uuid,
+		serviceInstanceId = service?.instanceId,
 		characteristicUuid = uuid,
 		instanceId = instanceId,
 	)
 
 	private fun BluetoothGattDescriptor.operationKey() = GattAttributeKey(
 		serviceUuid = characteristic.service?.uuid,
+		serviceInstanceId = characteristic.service?.instanceId,
 		characteristicUuid = characteristic.uuid,
 		descriptorUuid = uuid,
 		instanceId = characteristic.instanceId,
