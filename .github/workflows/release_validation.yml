@@ -1,0 +1,100 @@
+name: Android Release Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+      - 'app/**'
+      - 'build.gradle'
+      - 'build.gradle.kts'
+      - 'settings.gradle'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-builds:
+    name: Standard and TS18 privileged release builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      JAVA_VERSION: '17'
+      JAVA_DISTRIBUTION: temurin
+      ANDROID_COMPILE_SDK: '36'
+      ANDROID_BUILD_TOOLS: '36.0.0'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: true
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699
+        with:
+          packages: "platform-tools build-tools;${{ env.ANDROID_BUILD_TOOLS }} platforms;android-${{ env.ANDROID_COMPILE_SDK }}"
+
+      - name: Configure and verify Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "::error::ANDROID_HOME/ANDROID_SDK_ROOT is not set."
+            exit 1
+          fi
+          printf 'sdk.dir=%s\n' "${sdk_root}" > local.properties
+          echo "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}" >> "${GITHUB_PATH}"
+          test -d "${sdk_root}/platforms/android-${ANDROID_COMPILE_SDK}"
+          test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/aapt"
+          test -x "${sdk_root}/build-tools/${ANDROID_BUILD_TOOLS}/apksigner"
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build release variants
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p app/build/reports/ci
+          ./gradlew --no-daemon --stacktrace --warning-mode all \
+            :app:assembleStandardRelease \
+            :app:assembleTs18PrivilegedRelease 2>&1 \
+            | tee app/build/reports/ci/release-builds.log
+
+      - name: Upload release-build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: btandroidts-release-build-diagnostics
+          path: |
+            app/build/reports/ci/release-builds.log
+            app/build/outputs/mapping/**
+          if-no-files-found: warn
+          retention-days: 7
