@@ -37,7 +37,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -99,16 +98,13 @@ class AndroidBLEClientConnector(
 	private var activeNotificationKey: GattAttributeKey? = null
 
 	override suspend fun connect(address: String, autoConnect: Boolean): Result<Boolean> {
-		if (!context.hasBTConnectPermission) {
-			return Result.failure(BluetoothPermissionNotProvided())
-		}
-		if (bluetoothAdapter?.isEnabled != true) {
-			return Result.failure(BluetoothNotEnabled())
-		}
+		if (!context.hasBTConnectPermission) return Result.failure(BluetoothPermissionNotProvided())
+		if (bluetoothAdapter?.isEnabled != true) return Result.failure(BluetoothNotEnabled())
 		if (!BluetoothAdapter.checkBluetoothAddress(address)) {
 			return Result.failure(InvalidDeviceAddressException())
 		}
 
+		var candidate: AndroidGattTransport? = null
 		return try {
 			val device = bluetoothAdapter?.getRemoteDevice(address)
 				?: return Result.failure(InvalidDeviceAddressException())
@@ -118,6 +114,7 @@ class AndroidBLEClientConnector(
 			operationQueue.close(GattOperationException.SessionReplaced())
 			operationQueue = GattOperationQueue(scope)
 			transport?.close()
+			transport = null
 
 			@Suppress("DEPRECATION")
 			val gatt = device.connectGatt(
@@ -126,21 +123,22 @@ class AndroidBLEClientConnector(
 				gattCallback,
 				BluetoothDevice.TRANSPORT_LE,
 			)
-			val newTransport = AndroidGattTransport(gatt)
-			transport = newTransport
-			operationQueue.attachSession(newTransport.sessionToken)
+			candidate = AndroidGattTransport(gatt)
+			transport = candidate
+			operationQueue.attachSession(candidate.sessionToken)
 			reader.loadFromFiles()
 
 			val state = awaitConnectionTerminalState(CONNECTION_TIMEOUT_MS)
 			if (state != BLEConnectionState.CONNECTED) {
-				return Result.failure(
-					IllegalStateException("Bluetooth GATT connection failed: $state")
-				)
+				val failure = IllegalStateException("Bluetooth GATT connection failed: $state")
+				releaseFailedConnection(candidate, failure)
+				return Result.failure(failure)
 			}
 
 			launchInitialOperations()
 			Result.success(true)
 		} catch (error: Exception) {
+			releaseFailedConnection(candidate ?: transport, error)
 			if (error is CancellationException) throw error
 			Result.failure(error)
 		}
@@ -201,11 +199,12 @@ class AndroidBLEClientConnector(
 		val current = transport ?: return Result.failure(GattOperationException.NoActiveSession())
 		val gattCharacteristic = gattCallback.findCharacteristicFromDomainModel(service, characteristic)
 			?: return Result.failure(InvalidBLEConfigurationException())
-		val key = characteristicKey(service, characteristic)
-
 		return operationQueue.execute(
 			name = "read characteristic ${characteristic.uuid}",
-			expectedCallback = ExpectedGattCallback(GattCallbackType.CHARACTERISTIC_READ, key),
+			expectedCallback = ExpectedGattCallback(
+				GattCallbackType.CHARACTERISTIC_READ,
+				characteristicKey(service, characteristic),
+			),
 			start = { current.readCharacteristic(gattCharacteristic) },
 		).map { true }
 	}
@@ -218,13 +217,13 @@ class AndroidBLEClientConnector(
 		val current = transport ?: return Result.failure(GattOperationException.NoActiveSession())
 		val gattCharacteristic = gattCallback.findCharacteristicFromDomainModel(service, characteristic)
 			?: return Result.failure(InvalidBLEConfigurationException())
-		val key = characteristicKey(service, characteristic)
-		val bytes = value.encodeToByteArray()
-
 		return operationQueue.execute(
 			name = "write characteristic ${characteristic.uuid}",
-			expectedCallback = ExpectedGattCallback(GattCallbackType.CHARACTERISTIC_WRITE, key),
-			start = { current.writeCharacteristic(gattCharacteristic, bytes) },
+			expectedCallback = ExpectedGattCallback(
+				GattCallbackType.CHARACTERISTIC_WRITE,
+				characteristicKey(service, characteristic),
+			),
+			start = { current.writeCharacteristic(gattCharacteristic, value.encodeToByteArray()) },
 		).map { true }
 	}
 
@@ -282,16 +281,15 @@ class AndroidBLEClientConnector(
 	): Result<Boolean> {
 		val current = transport ?: return Result.failure(GattOperationException.NoActiveSession())
 		val gattDescriptor = gattCallback.findDescriptorFromDomainModel(
-			service = service,
-			characteristic = characteristic,
-			descriptor = descriptor,
+			service,
+			characteristic,
+			descriptor,
 		) ?: return Result.failure(InvalidBLEConfigurationException())
-
 		return operationQueue.execute(
 			name = "read descriptor ${descriptor.uuid}",
 			expectedCallback = ExpectedGattCallback(
-				type = GattCallbackType.DESCRIPTOR_READ,
-				key = descriptorKey(service, characteristic, descriptor.uuid),
+				GattCallbackType.DESCRIPTOR_READ,
+				descriptorKey(service, characteristic, descriptor.uuid),
 			),
 			start = { current.readDescriptor(gattDescriptor) },
 		).map { true }
@@ -304,9 +302,9 @@ class AndroidBLEClientConnector(
 		value: String,
 	): Result<Boolean> {
 		val gattDescriptor = gattCallback.findDescriptorFromDomainModel(
-			service = service,
-			characteristic = characteristic,
-			descriptor = descriptor,
+			service,
+			characteristic,
+			descriptor,
 		) ?: return Result.failure(InvalidBLEConfigurationException())
 		return writeDescriptorInternal(
 			descriptor = gattDescriptor,
@@ -322,7 +320,6 @@ class AndroidBLEClientConnector(
 			activeNotificationKey = null
 			notifyOrIndicationRunning.value = false
 			current.disconnect()
-
 			val state = awaitConnectionTerminalState(DISCONNECT_TIMEOUT_MS)
 			if (state == BLEConnectionState.DISCONNECTED) {
 				Result.success(Unit)
@@ -375,6 +372,19 @@ class AndroidBLEClientConnector(
 			checkRssi().onFailure { error -> Log.w(TAG, "Initial RSSI read failed", error) }
 			discoverServices().onFailure { error -> Log.w(TAG, "Initial service discovery failed", error) }
 		}
+	}
+
+	private fun releaseFailedConnection(current: AndroidGattTransport?, cause: Throwable) {
+		operationQueue.close(cause)
+		try {
+			current?.close()
+		} catch (closeError: Exception) {
+			Log.w(TAG, "Failed to close unsuccessful GATT connection", closeError)
+		}
+		if (transport === current) transport = null
+		connectedDeviceValue = null
+		activeNotificationKey = null
+		notifyOrIndicationRunning.value = false
 	}
 
 	private fun characteristicKey(
