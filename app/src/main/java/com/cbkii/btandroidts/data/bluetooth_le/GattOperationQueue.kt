@@ -133,7 +133,8 @@ internal class GattOperationQueue(
 			request.completion.await()
 		} catch (error: Throwable) {
 			if (error is kotlinx.coroutines.CancellationException) throw error
-			Result.failure(error)
+			if (closed.get()) Result.failure(GattOperationException.QueueClosed())
+			else Result.failure(error)
 		}
 	}
 
@@ -165,7 +166,7 @@ internal class GattOperationQueue(
 		if (!closed.compareAndSet(false, true)) return
 
 		sessionToken = null
-		requests.close(cause)
+		requests.close()
 		failActiveAndPending(cause)
 		worker.cancel(cause.message ?: "GATT queue closed", cause)
 	}
