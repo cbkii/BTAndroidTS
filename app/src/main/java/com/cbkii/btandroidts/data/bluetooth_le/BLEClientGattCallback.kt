@@ -69,6 +69,10 @@ internal class BLEClientGattCallback(
 		_readCharacteristic.value = null
 	}
 
+	fun markSessionFailed() {
+		_connectionState.value = BLEConnectionState.FAILED
+	}
+
 	override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
 		if (gatt == null || !acceptSession(gatt, "connection state")) return
 
@@ -76,7 +80,7 @@ internal class BLEClientGattCallback(
 			operationQueue().failActiveAndPending(
 				GattOperationException.CallbackFailed("connection", "status=$status"),
 			)
-			_connectionState.value = BLEConnectionState.FAILED
+			markSessionFailed()
 			Log.e(GATT_LOGGER, "Connection failed with status=$status")
 			sessionGate.retire(gatt)
 			gatt.close()
