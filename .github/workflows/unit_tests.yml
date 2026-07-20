@@ -79,4 +79,21 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Unit tests
-        run: ./gradlew --no-daemon --stacktrace --warning-mode all :app:testStandardDebugUnitTest
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p app/build/reports/ci
+          ./gradlew --no-daemon --stacktrace --warning-mode all :app:testStandardDebugUnitTest 2>&1 \
+            | tee app/build/reports/ci/unit-tests.log
+
+      - name: Upload unit-test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: btandroidts-unit-test-diagnostics
+          path: |
+            app/build/reports/ci/unit-tests.log
+            app/build/reports/tests/testStandardDebugUnitTest/**
+            app/build/test-results/testStandardDebugUnitTest/**
+          if-no-files-found: warn
+          retention-days: 7
