@@ -62,7 +62,7 @@ class AndroidBLEClientConnector(
 	private val notificationMutex = Mutex()
 
 	@Volatile
-	private var operationQueue = GattOperationQueue(scope)
+	private var operationQueue = newOperationQueue()
 
 	private val gattCallback by lazy {
 		BLEClientGattCallback(
@@ -81,6 +81,8 @@ class AndroidBLEClientConnector(
 	}
 
 	private var transport: AndroidGattTransport? = null
+	private var lastAddress: String? = null
+	private var lastAutoConnect: Boolean = false
 
 	override val connectionState: StateFlow<BLEConnectionState>
 		get() = gattCallback.connectionState
@@ -115,9 +117,11 @@ class AndroidBLEClientConnector(
 			return Result.failure(InvalidDeviceAddressException())
 		}
 		if (connectionState.value == BLEConnectionState.CONNECTED &&
-			connectedDeviceValue?.address == address && transport != null
+			connectedDeviceValue?.address == address && connectedTransport() != null
 		) return Result.success(true)
 
+		lastAddress = address
+		lastAutoConnect = autoConnect
 		var candidate: AndroidGattTransport? = null
 		return try {
 			val device = bluetoothAdapter?.getRemoteDevice(address)
@@ -126,7 +130,7 @@ class AndroidBLEClientConnector(
 			retireAndCloseTransport(transport)
 			transport = null
 			operationQueue.close(GattOperationException.SessionReplaced())
-			operationQueue = GattOperationQueue(scope)
+			operationQueue = newOperationQueue()
 			gattCallback.prepareForConnection()
 			connectedDeviceValue = device.toDomainModel()
 
@@ -186,36 +190,9 @@ class AndroidBLEClientConnector(
 
 	override suspend fun reconnect(): Result<Boolean> {
 		return connectionMutex.withLock {
-			val current = transport
+			val address = lastAddress ?: connectedDeviceValue?.address
 				?: return@withLock Result.failure(GattOperationException.NoActiveSession())
-			if (connectionState.value == BLEConnectionState.CONNECTED) {
-				return@withLock Result.success(true)
-			}
-			if (!sessionGate.isActive(current.sessionToken)) {
-				return@withLock Result.failure(GattOperationException.SessionDisconnected())
-			}
-
-			try {
-				gattCallback.prepareForConnection()
-				if (!current.reconnect()) {
-					val failure = GattOperationException.StartRejected("reconnect")
-					releaseFailedConnection(current, failure)
-					return@withLock Result.failure(failure)
-				}
-				val state = awaitConnectionTerminalState(CONNECTION_TIMEOUT_MS)
-				if (state != BLEConnectionState.CONNECTED) {
-					val failure = IllegalStateException("Bluetooth GATT reconnect failed: $state")
-					releaseFailedConnection(current, failure)
-					Result.failure(failure)
-				} else {
-					launchInitialOperations()
-					Result.success(true)
-				}
-			} catch (error: Exception) {
-				releaseFailedConnection(current, error)
-				if (error is CancellationException) throw error
-				Result.failure(error)
-			}
+			connectInternal(address, lastAutoConnect)
 		}
 	}
 
@@ -347,6 +324,9 @@ class AndroidBLEClientConnector(
 		descriptor: BLEDescriptorModel,
 		value: String,
 	): Result<Boolean> {
+		if (connectedTransport() == null) {
+			return Result.failure(GattOperationException.SessionDisconnected())
+		}
 		val gattDescriptor = gattCallback.findDescriptorFromDomainModel(
 			service,
 			characteristic,
@@ -363,6 +343,7 @@ class AndroidBLEClientConnector(
 		return connectionMutex.withLock {
 			val current = transport ?: return@withLock Result.success(Unit)
 			if (connectionState.value == BLEConnectionState.DISCONNECTED) {
+				finishDisconnectedSession(current)
 				return@withLock Result.success(Unit)
 			}
 
@@ -373,6 +354,7 @@ class AndroidBLEClientConnector(
 				current.disconnect()
 				val state = awaitConnectionTerminalState(DISCONNECT_TIMEOUT_MS)
 				if (state == BLEConnectionState.DISCONNECTED) {
+					finishDisconnectedSession(current)
 					Result.success(Unit)
 				} else {
 					val failure = IllegalStateException("Bluetooth GATT disconnect failed: $state")
@@ -392,6 +374,7 @@ class AndroidBLEClientConnector(
 		activeNotificationKey = null
 		notifyOrIndicationRunning.value = false
 		connectedDeviceValue = null
+		lastAddress = null
 		reader.clearCache()
 		retireAndCloseTransport(transport)
 		transport = null
@@ -414,7 +397,10 @@ class AndroidBLEClientConnector(
 	}
 
 	private fun connectedTransport(): AndroidGattTransport? {
-		return transport?.takeIf { connectionState.value == BLEConnectionState.CONNECTED }
+		return transport?.takeIf { current ->
+			connectionState.value == BLEConnectionState.CONNECTED &&
+				sessionGate.isActive(current.sessionToken)
+		}
 	}
 
 	private suspend fun awaitConnectionTerminalState(timeoutMs: Long): BLEConnectionState? {
@@ -434,8 +420,33 @@ class AndroidBLEClientConnector(
 		}
 	}
 
+	private fun newOperationQueue(): GattOperationQueue {
+		return GattOperationQueue(
+			scope = scope,
+			onSessionInvalidated = { sessionToken, cause ->
+				scope.launch {
+					connectionMutex.withLock {
+						val current = transport
+						if (current?.sessionToken === sessionToken) {
+							releaseFailedConnection(current, cause)
+						}
+					}
+				}
+			},
+		)
+	}
+
+	private fun finishDisconnectedSession(current: AndroidGattTransport) {
+		operationQueue.close(GattOperationException.SessionDisconnected())
+		retireAndCloseTransport(current)
+		if (transport === current) transport = null
+		activeNotificationKey = null
+		notifyOrIndicationRunning.value = false
+	}
+
 	private fun releaseFailedConnection(current: AndroidGattTransport?, cause: Throwable) {
 		operationQueue.close(cause)
+		gattCallback.markSessionFailed()
 		retireAndCloseTransport(current)
 		if (transport === current) transport = null
 		connectedDeviceValue = null
