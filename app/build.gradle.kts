@@ -38,17 +38,13 @@ android {
 	}
 
 	signingConfigs {
-		// find if there is a properties file
 		val keySecretFile = rootProject.file("keystore.properties")
 		if (!keySecretFile.exists()) return@signingConfigs
 
-		// load the properties
 		val properties = Properties()
 		keySecretFile.inputStream().use { properties.load(it) }
-
 		val userHome = System.getProperty("user.home")
 		val storeFileName = properties.getProperty("STORE_FILE_NAME")
-
 		val keyStoreFolder = File(userHome, "keystore")
 		if (!keyStoreFolder.exists()) return@signingConfigs
 
@@ -64,18 +60,15 @@ android {
 	}
 
 	buildTypes {
-
 		debug {
 			applicationIdSuffix = ".debug"
 			isMinifyEnabled = false
 		}
-
 		release {
 			isMinifyEnabled = true
 			isShrinkResources = true
 			multiDexEnabled = true
 			signingConfig = signingConfigs.findByName("release")
-
 			proguardFiles(
 				getDefaultProguardFile("proguard-android-optimize.txt"),
 				"proguard-rules.pro"
@@ -113,38 +106,30 @@ composeCompiler {
 }
 
 dependencies {
-	//core
 	implementation(libs.androidx.core.ktx)
 	implementation(libs.androidx.lifecycle.runtime.ktx)
 	implementation(libs.androidx.activity.compose)
-	//	compose
 	implementation(platform(libs.androidx.compose.bom))
 	implementation(libs.bundles.compose)
-	//lifecycle compose runtime
 	implementation(libs.androidx.lifecycle.runtime.compose)
-	//navigation
 	implementation(libs.compose.destination.core)
 	ksp(libs.compose.destination.ksp)
-	//kotlinx
 	implementation(libs.bundles.kotlinx)
-	//splash api
 	implementation(libs.androidx.core.splashscreen)
-	// koin
 	implementation(platform(libs.koin.bom))
 	implementation(libs.bundles.koin)
-	// shapes
 	implementation(libs.androidx.graphics.shapes)
-	//datastore
 	implementation(libs.androidx.datastore)
 	implementation(libs.protobuf.javalite)
 	implementation(libs.protobuf.kotlin.lite)
-	//tests
+
 	testImplementation(libs.junit)
+	testImplementation(libs.kotlinx.coroutines.test)
 	androidTestImplementation(libs.androidx.junit)
 	androidTestImplementation(libs.androidx.espresso.core)
 	androidTestImplementation(platform(libs.androidx.compose.bom))
 	androidTestImplementation(libs.androidx.ui.test.junit4)
-	//debug
+
 	debugImplementation(libs.androidx.ui.tooling)
 	debugImplementation(libs.androidx.ui.test.manifest)
 }
@@ -158,7 +143,6 @@ protobuf {
 			artifact = libs.protobuf.protoc.gen.javalite.get().toString()
 		}
 	}
-
 	generateProtoTasks {
 		all().forEach { task ->
 			task.plugins {
