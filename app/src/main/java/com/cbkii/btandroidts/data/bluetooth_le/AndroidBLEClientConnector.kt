@@ -3,12 +3,9 @@ package com.cbkii.btandroidts.data.bluetooth_le
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
-import android.os.Build
 import android.util.Log
 import androidx.core.content.getSystemService
 import com.cbkii.btandroidts.data.mapper.canIndicate
@@ -39,9 +36,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 
 private const val TAG = "BLE_CLIENT_LOGGER"
+private const val CONNECTION_TIMEOUT_MS = 15_000L
+private const val DISCONNECT_TIMEOUT_MS = 5_000L
 
 @SuppressLint("MissingPermission")
 class AndroidBLEClientConnector(
@@ -49,320 +52,455 @@ class AndroidBLEClientConnector(
 	private val reader: SampleUUIDReader,
 ) : BluetoothLEClientConnector {
 
-	private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+	private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+	private val bluetoothManager by lazy { context.getSystemService<BluetoothManager>() }
+	private val bluetoothAdapter: BluetoothAdapter?
+		get() = bluetoothManager?.adapter
 
-	private val _bluetoothManager by lazy { context.getSystemService<BluetoothManager>() }
-	private val _gattCallback by lazy {
-		BLEClientGattCallback(reader = reader, echoWrite = true, scope = scope)
+	private val sessionGate = GattSessionGate()
+	private val connectionMutex = Mutex()
+	private val notificationMutex = Mutex()
+
+	@Volatile
+	private var operationQueue = newOperationQueue()
+
+	private val gattCallback by lazy {
+		BLEClientGattCallback(
+			reader = reader,
+			operationQueue = { operationQueue },
+			sessionGate = sessionGate,
+			onServiceChanged = {
+				scope.launch {
+					discoverServices().onFailure { error ->
+						Log.w(TAG, "Service rediscovery failed", error)
+					}
+				}
+			},
+			scope = scope,
+		)
 	}
 
-	private val _btAdapter: BluetoothAdapter?
-		get() = _bluetoothManager?.adapter
+	private var transport: AndroidGattTransport? = null
+	private var lastAddress: String? = null
+	private var lastAutoConnect: Boolean = false
+
+	@Volatile
+	private var disconnectRequested: Boolean = false
 
 	override val connectionState: StateFlow<BLEConnectionState>
-		get() = _gattCallback.connectionState
+		get() = gattCallback.connectionState
 
 	override val connEvents: Flow<BLEConnectionEvents>
-		get() = _gattCallback.connEvents
+		get() = gattCallback.connEvents
 
 	override val bleServices: Flow<List<BLEServiceModel>>
-		get() = _gattCallback.bleGattServices
+		get() = gattCallback.bleGattServices
 
 	override val readForCharacteristic: Flow<BLECharacteristicsModel?>
-		get() = _gattCallback.readCharacteristics
+		get() = gattCallback.readCharacteristics
 
-	private var _connectedDevice: BluetoothDeviceModel? = null
+	private var connectedDeviceValue: BluetoothDeviceModel? = null
 	override val connectedDevice: BluetoothDeviceModel?
-		get() = _connectedDevice
+		get() = connectedDeviceValue
 
-	private val _isNotifyOrIndicationRunning = MutableStateFlow(false)
+	private val notifyOrIndicationRunning = MutableStateFlow(false)
 	override val isNotifyOrIndicationRunning: StateFlow<Boolean>
-		get() = _isNotifyOrIndicationRunning.asStateFlow()
+		get() = notifyOrIndicationRunning.asStateFlow()
 
-
-	private var _bLEGatt: BluetoothGatt? = null
+	private var activeNotificationKey: GattAttributeKey? = null
 
 	override suspend fun connect(address: String, autoConnect: Boolean): Result<Boolean> {
-		if (!context.hasBTConnectPermission)
-			return Result.failure(BluetoothPermissionNotProvided())
-		if (_bluetoothManager?.adapter?.isEnabled != true)
-			return Result.failure(BluetoothNotEnabled())
-		if (!BluetoothAdapter.checkBluetoothAddress(address))
+		return connectionMutex.withLock { connectInternal(address, autoConnect) }
+	}
+
+	private suspend fun connectInternal(address: String, autoConnect: Boolean): Result<Boolean> {
+		if (!context.hasBTConnectPermission) return Result.failure(BluetoothPermissionNotProvided())
+		if (bluetoothAdapter?.isEnabled != true) return Result.failure(BluetoothNotEnabled())
+		if (!BluetoothAdapter.checkBluetoothAddress(address)) {
 			return Result.failure(InvalidDeviceAddressException())
+		}
+		if (connectionState.value == BLEConnectionState.CONNECTED &&
+			connectedDeviceValue?.address == address && connectedTransport() != null
+		) return Result.success(true)
 
+		disconnectRequested = false
+		lastAddress = address
+		lastAutoConnect = autoConnect
+		var candidate: AndroidGattTransport? = null
 		return try {
-			val device = _btAdapter?.getRemoteDevice(address) ?: return Result.success(false)
-			// update the device
-			_connectedDevice = device.toDomainModel()
+			val device = bluetoothAdapter?.getRemoteDevice(address)
+				?: return Result.failure(InvalidDeviceAddressException())
 
-			// connect to the gatt server
+			retireAndCloseTransport(transport)
+			transport = null
+			operationQueue.close(GattOperationException.SessionReplaced())
+			operationQueue = newOperationQueue()
+			gattCallback.prepareForConnection()
+			connectedDeviceValue = device.toDomainModel()
+
 			@Suppress("DEPRECATION")
-			_bLEGatt = device.connectGatt(
+			val gatt = device.connectGatt(
 				context,
 				autoConnect,
-				_gattCallback,
-				BluetoothDevice.TRANSPORT_LE
+				gattCallback,
+				BluetoothDevice.TRANSPORT_LE,
 			)
+			candidate = AndroidGattTransport(gatt)
+			if (!sessionGate.activate(candidate.sessionToken)) {
+				val failure = GattOperationException.SessionReplaced()
+				releaseFailedConnection(candidate, failure)
+				return Result.failure(failure)
+			}
 
-			Log.d(TAG, "CONNECT GATT")
-			// load all files
+			transport = candidate
+			operationQueue.attachSession(candidate.sessionToken)
 			reader.loadFromFiles()
-			// return success if there is no error
+
+			val state = awaitConnectionTerminalState(CONNECTION_TIMEOUT_MS)
+			if (state != BLEConnectionState.CONNECTED) {
+				val failure = IllegalStateException("Bluetooth GATT connection failed: $state")
+				releaseFailedConnection(candidate, failure)
+				return Result.failure(failure)
+			}
+
+			launchInitialOperations()
 			Result.success(true)
-		} catch (e: Exception) {
-			if (e is CancellationException) throw e
-			Result.failure(e)
+		} catch (error: Exception) {
+			releaseFailedConnection(candidate ?: transport, error)
+			if (error is CancellationException) throw error
+			Result.failure(error)
 		}
 	}
 
-	override fun checkRssi(): Result<Boolean> {
-		return try {
-			Log.i(TAG, "CHECKING RSSI")
-			val isSuccess = _bLEGatt?.readRemoteRssi() ?: false
-			Result.success(isSuccess)
-		} catch (e: Exception) {
-			Result.failure(e)
+	override suspend fun checkRssi(): Result<Boolean> {
+		val current = connectedTransport()
+			?: return Result.failure(GattOperationException.SessionDisconnected())
+		return operationQueue.execute(
+			name = "read remote RSSI",
+			expectedCallback = ExpectedGattCallback(GattCallbackType.RSSI_READ),
+			start = current::readRemoteRssi,
+		).map { true }
+	}
+
+	override suspend fun discoverServices(): Result<Boolean> {
+		val current = connectedTransport()
+			?: return Result.failure(GattOperationException.SessionDisconnected())
+		return operationQueue.execute(
+			name = "discover services",
+			expectedCallback = ExpectedGattCallback(GattCallbackType.SERVICES_DISCOVERED),
+			start = current::discoverServices,
+		).map { true }
+	}
+
+	override suspend fun reconnect(): Result<Boolean> {
+		return connectionMutex.withLock {
+			val address = lastAddress ?: connectedDeviceValue?.address
+				?: return@withLock Result.failure(GattOperationException.NoActiveSession())
+			connectInternal(address, lastAutoConnect)
 		}
 	}
 
-	override fun discoverServices(): Result<Boolean> {
-		return try {
-			Log.i(TAG, "DISCOVERING SERVICES")
-			val isSuccess = _bLEGatt?.discoverServices() ?: false
-			Result.success(isSuccess)
-		} catch (e: Exception) {
-			Result.failure(e)
-		}
+	override suspend fun onUpdateMTU(mtu: Int): Result<Boolean> {
+		if (mtu !in 23..517) return Result.failure(InvalidMTUValueException())
+		val current = connectedTransport()
+			?: return Result.failure(GattOperationException.SessionDisconnected())
+		return operationQueue.execute(
+			name = "request MTU $mtu",
+			expectedCallback = ExpectedGattCallback(GattCallbackType.MTU_CHANGED),
+			start = { current.requestMtu(mtu) },
+		).map { true }
 	}
 
-	override fun reconnect(): Result<Boolean> {
-		return try {
-			Log.i(TAG, "CLIENT RE-CONNECTED")
-			val result = _bLEGatt?.connect() ?: false
-			Result.success(result)
-		} catch (e: Exception) {
-			Result.failure(e)
-		}
-	}
-
-	override fun onUpdateMTU(mtu: Int): Result<Boolean> {
-		return try {
-			if (mtu !in 23..517) return Result.failure(InvalidMTUValueException())
-			Log.i(TAG, "REQUESTING MTU UPDATE")
-			val result = _bLEGatt?.requestMtu(mtu) ?: false
-			Result.success(result)
-		} catch (e: Exception) {
-			Log.d(TAG, "FAILED TO UPDATE MTU", e)
-			Result.failure(e)
-		}
-	}
-
-	override fun read(service: BLEServiceModel, characteristic: BLECharacteristicsModel)
-			: Result<Boolean> {
-		return try {
-			val gattCharacteristic = _gattCallback.findCharacteristicFromDomainModel(
-				service = service,
-				characteristic = characteristic
-			) ?: return Result.failure(InvalidBLEConfigurationException())
-
-			val isSuccess = _bLEGatt?.readCharacteristic(gattCharacteristic) ?: false
-
-			Log.i(TAG, "CHARACTERISTIC ${characteristic.uuid}  SUCCESS:$isSuccess")
-
-			Result.success(isSuccess)
-		} catch (e: Exception) {
-			e.printStackTrace()
-			Result.failure(e)
-		}
-	}
-
-	override fun write(
+	override suspend fun read(
 		service: BLEServiceModel,
 		characteristic: BLECharacteristicsModel,
-		value: String
 	): Result<Boolean> {
-		return try {
-			val bytes = value.encodeToByteArray()
+		val current = connectedTransport()
+			?: return Result.failure(GattOperationException.SessionDisconnected())
+		val gattCharacteristic = gattCallback.findCharacteristicFromDomainModel(service, characteristic)
+			?: return Result.failure(InvalidBLEConfigurationException())
+		return operationQueue.execute(
+			name = "read characteristic ${characteristic.uuid}",
+			expectedCallback = ExpectedGattCallback(
+				GattCallbackType.CHARACTERISTIC_READ,
+				characteristicKey(service, characteristic),
+			),
+			start = { current.readCharacteristic(gattCharacteristic) },
+		).map { true }
+	}
 
-			val gattCharacteristic = _gattCallback.findCharacteristicFromDomainModel(
-				service = service,
-				characteristic = characteristic
-			) ?: return Result.failure(InvalidBLEConfigurationException())
+	override suspend fun write(
+		service: BLEServiceModel,
+		characteristic: BLECharacteristicsModel,
+		value: String,
+	): Result<Boolean> {
+		val current = connectedTransport()
+			?: return Result.failure(GattOperationException.SessionDisconnected())
+		val gattCharacteristic = gattCallback.findCharacteristicFromDomainModel(service, characteristic)
+			?: return Result.failure(InvalidBLEConfigurationException())
+		return operationQueue.execute(
+			name = "write characteristic ${characteristic.uuid}",
+			expectedCallback = ExpectedGattCallback(
+				GattCallbackType.CHARACTERISTIC_WRITE,
+				characteristicKey(service, characteristic),
+			),
+			start = { current.writeCharacteristic(gattCharacteristic, value.encodeToByteArray()) },
+		).map { true }
+	}
 
-			val isSuccess = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-				val operation = _bLEGatt?.writeCharacteristic(
-					gattCharacteristic,
-					bytes,
-					gattCharacteristic.writeType
-				)
-				operation == BluetoothStatusCodes.SUCCESS
-			} else {
-				@Suppress("DEPRECATION")
-				gattCharacteristic.value = bytes
+	override suspend fun startIndicationOrNotification(
+		service: BLEServiceModel,
+		characteristic: BLECharacteristicsModel,
+		enable: Boolean,
+	): Result<Boolean> = notificationMutex.withLock {
+		if (!characteristic.isIndicateOrNotify) {
+			return@withLock Result.failure(BLEMissingNotifyPropertiesException())
+		}
 
-				@Suppress("DEPRECATION")
-				_bLEGatt?.writeCharacteristic(gattCharacteristic) ?: false
-			}
+		val current = connectedTransport()
+			?: return@withLock Result.failure(GattOperationException.SessionDisconnected())
+		val gattCharacteristic = gattCallback.findCharacteristicFromDomainModel(service, characteristic)
+			?: return@withLock Result.failure(InvalidBLEConfigurationException())
+		val key = characteristicKey(service, characteristic)
+		val activeKey = activeNotificationKey
 
-			Log.i(
-				TAG,
-				"WRITE TO CHARACTERISTIC ${characteristic.uuid}  SUCCESS:$isSuccess"
+		if (enable && activeKey == key) return@withLock Result.success(true)
+		if (!enable && activeKey == null) return@withLock Result.success(true)
+		if (activeKey != null && activeKey != key) {
+			return@withLock Result.failure(BLEIndicationOrNotifyRunningException())
+		}
+
+		val descriptor = gattCharacteristic.getDescriptor(BLEClientUUID.CCC_DESCRIPTOR_UUID)
+			?: return@withLock Result.failure(InvalidBLEConfigurationException())
+		val descriptorValue = when {
+			enable && characteristic.canNotify -> BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+			enable && characteristic.canIndicate -> BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+			!enable -> BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
+			else -> return@withLock Result.failure(BLEMissingNotifyPropertiesException())
+		}
+
+		if (!current.setCharacteristicNotification(gattCharacteristic, enable)) {
+			return@withLock Result.failure(
+				GattOperationException.StartRejected("set local characteristic notification")
 			)
-
-			Result.success(isSuccess)
-		} catch (e: Exception) {
-			e.printStackTrace()
-			Result.failure(e)
 		}
-	}
 
-	override fun startIndicationOrNotification(
-		service: BLEServiceModel,
-		characteristic: BLECharacteristicsModel,
-		enable: Boolean
-	): Result<Boolean> {
-		return try {
-			// if enable true and notify or indication is already running then no need to
-			// start indication or notify
-			if (!characteristic.isIndicateOrNotify)
-				return Result.failure(BLEMissingNotifyPropertiesException())
-
-			if (enable && _isNotifyOrIndicationRunning.value) {
-				Log.i(TAG, "INDICATION OR NOTIFICATION ALREADY RUNNING")
-				return Result.failure(BLEIndicationOrNotifyRunningException())
+		val writeResult = writeDescriptorInternal(
+			descriptor = descriptor,
+			key = descriptorKey(service, characteristic, descriptor.uuid),
+			value = descriptorValue,
+		)
+		if (writeResult.isFailure) {
+			if (!disconnectRequested && sessionGate.isActive(current.sessionToken)) {
+				runCatching {
+					current.setCharacteristicNotification(gattCharacteristic, !enable)
+				}.onFailure { error ->
+					Log.w(TAG, "Failed to roll back local notification state", error)
+				}
 			}
-
-			val gattCharacteristic = _gattCallback.findCharacteristicFromDomainModel(
-				service = service,
-				characteristic = characteristic
-			) ?: return Result.failure(InvalidBLEConfigurationException())
-
-			// set characteristic notifications
-			val isSuccess = _bLEGatt?.setCharacteristicNotification(gattCharacteristic, enable)
-				?: false
-
-			Log.d(
-				TAG,
-				"CHARACTERISTIC NOTIFICATION :$enable UUID ${characteristic.uuid} SUCCESS: $isSuccess"
-			)
-
-			// if not success return isSuccess as false
-			if (!isSuccess) return Result.success(false)
-
-			// as its successfully started mark it as active
-			_isNotifyOrIndicationRunning.update { enable }
-			Log.i(TAG, "INDICATION OR NOTIFICATION MARKED AS $enable")
-
-			// set the descriptor value for client config
-			val descriptorValue = when {
-				enable && characteristic.canNotify -> BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-				enable && characteristic.canIndicate -> BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
-				!enable -> BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
-				else -> return Result.failure(BLEMissingNotifyPropertiesException())
-			}
-
-			// needs a client config descriptor if not found then it's a failure
-			val isWriteDescriptor = gattCharacteristic
-				.getDescriptor(BLEClientUUID.CCC_DESCRIPTOR_UUID)
-				?.let { desc -> writeToDescriptor(descriptor = desc, bytes = descriptorValue) }
-
-			Log.d(TAG, "IS WRITE DESC SUCCESS ${isWriteDescriptor?.isSuccess}")
-
-			Result.success(true)
-		} catch (e: Exception) {
-			e.printStackTrace()
-			Result.failure(e)
+			return@withLock writeResult
 		}
+
+		if (connectedTransport() !== current) {
+			return@withLock Result.failure(GattOperationException.SessionDisconnected())
+		}
+		activeNotificationKey = if (enable) key else null
+		notifyOrIndicationRunning.value = enable
+		Result.success(true)
 	}
 
-	override fun readDescriptor(
-		service: BLEServiceModel,
-		characteristic: BLECharacteristicsModel,
-		descriptor: BLEDescriptorModel
-	): Result<Boolean> {
-		return try {
-			val gattDescriptor = _gattCallback.findDescriptorFromDomainModel(
-				service = service,
-				characteristic = characteristic,
-				descriptor = descriptor
-			) ?: return Result.failure(InvalidBLEConfigurationException())
-
-			val isSuccess = _bLEGatt?.readDescriptor(gattDescriptor) ?: false
-
-			Log.i(TAG, "READ DESCRIPTOR $gattDescriptor  SUCCESS:$isSuccess")
-
-			Result.success(isSuccess)
-		} catch (e: Exception) {
-			e.printStackTrace()
-			Result.failure(e)
-		}
-	}
-
-	override fun writeToDescriptor(
+	override suspend fun readDescriptor(
 		service: BLEServiceModel,
 		characteristic: BLECharacteristicsModel,
 		descriptor: BLEDescriptorModel,
-		value: String
 	): Result<Boolean> {
-		return try {
-			val bytes = value.encodeToByteArray()
-
-			val gattDescriptor = _gattCallback.findDescriptorFromDomainModel(
-				service = service,
-				characteristic = characteristic,
-				descriptor = descriptor
-			) ?: return Result.failure(InvalidBLEConfigurationException())
-
-			writeToDescriptor(gattDescriptor, bytes)
-		} catch (e: Exception) {
-			e.printStackTrace()
-			Result.failure(e)
-		}
+		val current = connectedTransport()
+			?: return Result.failure(GattOperationException.SessionDisconnected())
+		val gattDescriptor = gattCallback.findDescriptorFromDomainModel(
+			service,
+			characteristic,
+			descriptor,
+		) ?: return Result.failure(InvalidBLEConfigurationException())
+		return operationQueue.execute(
+			name = "read descriptor ${descriptor.uuid}",
+			expectedCallback = ExpectedGattCallback(
+				GattCallbackType.DESCRIPTOR_READ,
+				descriptorKey(service, characteristic, descriptor.uuid),
+			),
+			start = { current.readDescriptor(gattDescriptor) },
+		).map { true }
 	}
 
-	override fun disconnect(): Result<Unit> {
-		return try {
-			_bLEGatt?.disconnect()
-			Log.d(TAG, "CLIENT DISCONNECTED")
-			// disconnects the gatt client
-			Result.success(Unit)
-		} catch (e: Exception) {
-			Result.failure(e)
+	override suspend fun writeToDescriptor(
+		service: BLEServiceModel,
+		characteristic: BLECharacteristicsModel,
+		descriptor: BLEDescriptorModel,
+		value: String,
+	): Result<Boolean> {
+		if (connectedTransport() == null) {
+			return Result.failure(GattOperationException.SessionDisconnected())
+		}
+		val gattDescriptor = gattCallback.findDescriptorFromDomainModel(
+			service,
+			characteristic,
+			descriptor,
+		) ?: return Result.failure(InvalidBLEConfigurationException())
+		return writeDescriptorInternal(
+			descriptor = gattDescriptor,
+			key = descriptorKey(service, characteristic, descriptor.uuid),
+			value = value.encodeToByteArray(),
+		)
+	}
+
+	override suspend fun disconnect(): Result<Unit> {
+		return connectionMutex.withLock {
+			val current = transport ?: return@withLock Result.success(Unit)
+			if (connectionState.value == BLEConnectionState.DISCONNECTED) {
+				finishDisconnectedSession(current)
+				return@withLock Result.success(Unit)
+			}
+
+			disconnectRequested = true
+			try {
+				operationQueue.failActiveAndPending(GattOperationException.SessionDisconnected())
+				activeNotificationKey = null
+				notifyOrIndicationRunning.value = false
+				current.disconnect()
+				val state = awaitConnectionTerminalState(DISCONNECT_TIMEOUT_MS)
+				if (state == BLEConnectionState.DISCONNECTED) {
+					finishDisconnectedSession(current)
+					Result.success(Unit)
+				} else {
+					val failure = IllegalStateException("Bluetooth GATT disconnect failed: $state")
+					releaseFailedConnection(current, failure)
+					Result.failure(failure)
+				}
+			} catch (error: Exception) {
+				releaseFailedConnection(current, error)
+				if (error is CancellationException) throw error
+				Result.failure(error)
+			}
 		}
 	}
 
 	override fun close() {
-		try {
-			_connectedDevice = null
-			// cancels the scope
-			scope.cancel()
-			reader.clearCache()
-			// close the gatt server
-			_bLEGatt?.close()
-			_bLEGatt = null
-			Log.d(TAG, "GATT CLIENT CLOSED")
-		} catch (e: Exception) {
-			e.printStackTrace()
+		disconnectRequested = true
+		operationQueue.close()
+		activeNotificationKey = null
+		notifyOrIndicationRunning.value = false
+		connectedDeviceValue = null
+		lastAddress = null
+		reader.clearCache()
+		retireAndCloseTransport(transport)
+		transport = null
+		scope.cancel()
+		Log.d(TAG, "GATT client closed")
+	}
+
+	private suspend fun writeDescriptorInternal(
+		descriptor: BluetoothGattDescriptor,
+		key: GattAttributeKey,
+		value: ByteArray,
+	): Result<Boolean> {
+		val current = connectedTransport()
+			?: return Result.failure(GattOperationException.SessionDisconnected())
+		return operationQueue.execute(
+			name = "write descriptor ${descriptor.uuid}",
+			expectedCallback = ExpectedGattCallback(GattCallbackType.DESCRIPTOR_WRITE, key),
+			start = { current.writeDescriptor(descriptor, value) },
+		).map { true }
+	}
+
+	private fun connectedTransport(): AndroidGattTransport? {
+		return transport?.takeIf { current ->
+			!disconnectRequested &&
+				connectionState.value == BLEConnectionState.CONNECTED &&
+				sessionGate.isActive(current.sessionToken)
 		}
 	}
 
-	private fun writeToDescriptor(descriptor: BluetoothGattDescriptor, bytes: ByteArray)
-			: Result<Boolean> {
-		return try {
-			val isSuccess = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-				val operation = _bLEGatt?.writeDescriptor(descriptor, bytes)
-				operation == BluetoothStatusCodes.SUCCESS
-			} else {
-				@Suppress("DEPRECATION")
-				descriptor.value = bytes
-
-				@Suppress("DEPRECATION")
-				_bLEGatt?.writeDescriptor(descriptor) ?: false
+	private suspend fun awaitConnectionTerminalState(timeoutMs: Long): BLEConnectionState? {
+		return withTimeoutOrNull(timeoutMs) {
+			connectionState.first { state ->
+				state == BLEConnectionState.CONNECTED ||
+						state == BLEConnectionState.DISCONNECTED ||
+						state == BLEConnectionState.FAILED
 			}
-			Result.success(isSuccess)
-		} catch (e: Exception) {
-			e.printStackTrace()
-			Result.failure(e)
 		}
 	}
+
+	private fun launchInitialOperations() {
+		scope.launch {
+			checkRssi().onFailure { error -> Log.w(TAG, "Initial RSSI read failed", error) }
+			discoverServices().onFailure { error -> Log.w(TAG, "Initial service discovery failed", error) }
+		}
+	}
+
+	private fun newOperationQueue(): GattOperationQueue {
+		return GattOperationQueue(
+			scope = scope,
+			onSessionInvalidated = { sessionToken, cause ->
+				scope.launch {
+					connectionMutex.withLock {
+						val current = transport
+						if (current?.sessionToken === sessionToken) {
+							releaseFailedConnection(current, cause)
+						}
+					}
+				}
+			},
+		)
+	}
+
+	private fun finishDisconnectedSession(current: AndroidGattTransport) {
+		operationQueue.close(GattOperationException.SessionDisconnected())
+		retireAndCloseTransport(current)
+		if (transport === current) transport = null
+		disconnectRequested = false
+		activeNotificationKey = null
+		notifyOrIndicationRunning.value = false
+	}
+
+	private fun releaseFailedConnection(current: AndroidGattTransport?, cause: Throwable) {
+		operationQueue.close(cause)
+		gattCallback.markSessionFailed()
+		retireAndCloseTransport(current)
+		if (transport === current) transport = null
+		disconnectRequested = false
+		connectedDeviceValue = null
+		activeNotificationKey = null
+		notifyOrIndicationRunning.value = false
+	}
+
+	private fun retireAndCloseTransport(current: AndroidGattTransport?) {
+		if (current == null) return
+		sessionGate.retire(current.sessionToken)
+		try {
+			current.close()
+		} catch (error: Exception) {
+			Log.w(TAG, "Failed to close GATT transport", error)
+		}
+	}
+
+	private fun characteristicKey(
+		service: BLEServiceModel,
+		characteristic: BLECharacteristicsModel,
+	) = GattAttributeKey(
+		serviceUuid = service.serviceUUID,
+		serviceInstanceId = service.serviceId,
+		characteristicUuid = characteristic.uuid,
+		instanceId = characteristic.instanceId,
+	)
+
+	private fun descriptorKey(
+		service: BLEServiceModel,
+		characteristic: BLECharacteristicsModel,
+		descriptorUuid: java.util.UUID,
+	) = GattAttributeKey(
+		serviceUuid = service.serviceUUID,
+		serviceInstanceId = service.serviceId,
+		characteristicUuid = characteristic.uuid,
+		descriptorUuid = descriptorUuid,
+		instanceId = characteristic.instanceId,
+	)
 }

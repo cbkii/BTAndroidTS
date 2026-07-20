@@ -1,4 +1,4 @@
-name: Android Unit Tests
+name: Android Release Validation
 
 on:
   pull_request:
@@ -25,10 +25,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  unit-tests:
-    name: Standard debug JVM tests
+  release-builds:
+    name: Standard and TS18 privileged release builds
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     env:
       JAVA_VERSION: '17'
@@ -78,22 +78,23 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Unit tests
+      - name: Build release variants
         shell: bash
         run: |
           set -o pipefail
           mkdir -p app/build/reports/ci
-          ./gradlew --no-daemon --stacktrace --warning-mode all :app:testStandardDebugUnitTest 2>&1 \
-            | tee app/build/reports/ci/unit-tests.log
+          ./gradlew --no-daemon --stacktrace --warning-mode all \
+            :app:assembleStandardRelease \
+            :app:assembleTs18PrivilegedRelease 2>&1 \
+            | tee app/build/reports/ci/release-builds.log
 
-      - name: Upload unit-test diagnostics
+      - name: Upload release-build diagnostics
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: btandroidts-unit-test-diagnostics
+          name: btandroidts-release-build-diagnostics
           path: |
-            app/build/reports/ci/unit-tests.log
-            app/build/reports/tests/testStandardDebugUnitTest/**
-            app/build/test-results/testStandardDebugUnitTest/**
+            app/build/reports/ci/release-builds.log
+            app/build/outputs/mapping/**
           if-no-files-found: warn
           retention-days: 7
