@@ -97,11 +97,7 @@ class BLEClientGattCallback(
 
 	override fun onReadRemoteRssi(gatt: BluetoothGatt?, rssi: Int, status: Int) {
 		if (gatt == null) return
-		complete(
-			gatt = gatt,
-			type = GattCallbackType.RSSI_READ,
-			status = status,
-		)
+		complete(gatt, GattCallbackType.RSSI_READ, status = status)
 		if (status == BluetoothGatt.GATT_SUCCESS) {
 			_events.tryEmit(BLEConnectionEvents.OnRSSIUpdated(rssi))
 		}
@@ -109,11 +105,7 @@ class BLEClientGattCallback(
 
 	override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
 		if (gatt == null) return
-		complete(
-			gatt = gatt,
-			type = GattCallbackType.MTU_CHANGED,
-			status = status,
-		)
+		complete(gatt, GattCallbackType.MTU_CHANGED, status = status)
 		if (status == BluetoothGatt.GATT_SUCCESS) {
 			_events.tryEmit(BLEConnectionEvents.OnMTUUpdated(mtu))
 		}
@@ -133,11 +125,7 @@ class BLEClientGattCallback(
 
 	override fun onServicesDiscovered(gatt: BluetoothGatt?, status: Int) {
 		if (gatt == null) return
-		complete(
-			gatt = gatt,
-			type = GattCallbackType.SERVICES_DISCOVERED,
-			status = status,
-		)
+		complete(gatt, GattCallbackType.SERVICES_DISCOVERED, status = status)
 		if (status == BluetoothGatt.GATT_SUCCESS) {
 			_bleGattServices.value = gatt.services.orEmpty()
 			Log.d(GATT_LOGGER, "Services discovered: ${gatt.services.size}")
@@ -179,11 +167,14 @@ class BLEClientGattCallback(
 			try {
 				val domainModel = characteristic.toDomainModelWithNames(reader).copy(byteArray = value)
 				_readCharacteristic.update { previous ->
-					if (previous?.uuid == domainModel.uuid && previous.instanceId == domainModel.instanceId) {
+					if (previous?.uuid == domainModel.uuid &&
+						previous.instanceId == domainModel.instanceId
+					) {
 						previous.copy(byteArray = value)
 					} else {
 						domainModel
 					}
+				}
 			} catch (error: Exception) {
 				if (error is CancellationException) throw error
 				Log.e(GATT_LOGGER, "Failed to map characteristic read", error)
@@ -307,8 +298,11 @@ class BLEClientGattCallback(
 	): BluetoothGattCharacteristic? {
 		return bleGattServicesValue
 			.find { it.uuid == service.serviceUUID }
-			?.getCharacteristic(characteristic.uuid)
-			?.takeIf { it.instanceId == characteristic.instanceId }
+			?.characteristics
+			?.find { candidate ->
+				candidate.uuid == characteristic.uuid &&
+						candidate.instanceId == characteristic.instanceId
+			}
 	}
 
 	fun findDescriptorFromDomainModel(
