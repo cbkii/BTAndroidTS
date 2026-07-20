@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.UUID
@@ -128,10 +129,19 @@ class GattOperationQueueTest {
 	}
 
 	@Test
-	fun missingCallbackTimesOutAndQueueContinues() = runTest {
+	fun missingCallbackInvalidatesSessionAndFailsPendingWork() = runTest {
 		val token = Any()
 		val starts = mutableListOf<String>()
-		val queue = GattOperationQueue(backgroundScope, defaultTimeoutMs = 100)
+		var invalidatedToken: Any? = null
+		var invalidationCause: Throwable? = null
+		val queue = GattOperationQueue(
+			scope = backgroundScope,
+			defaultTimeoutMs = 100,
+			onSessionInvalidated = { sessionToken, cause ->
+				invalidatedToken = sessionToken
+				invalidationCause = cause
+			},
+		)
 		queue.attachSession(token)
 
 		val timedOut = async {
@@ -140,9 +150,9 @@ class GattOperationQueueTest {
 				true
 			}
 		}
-		val next = async {
-			queue.execute("next", ExpectedGattCallback(GattCallbackType.MTU_CHANGED)) {
-				starts += "next"
+		val pending = async {
+			queue.execute("pending", ExpectedGattCallback(GattCallbackType.MTU_CHANGED)) {
+				starts += "pending"
 				true
 			}
 		}
@@ -151,10 +161,16 @@ class GattOperationQueueTest {
 		runCurrent()
 
 		assertTrue(timedOut.await().exceptionOrNull() is GattOperationException.TimedOut)
-		assertEquals(listOf("timeout", "next"), starts)
-		queue.onCallback(success(token, GattCallbackType.MTU_CHANGED))
-		runCurrent()
-		assertTrue(next.await().isSuccess)
+		assertTrue(pending.await().exceptionOrNull() is GattOperationException.TimedOut)
+		assertEquals(listOf("timeout"), starts)
+		assertSame(token, invalidatedToken)
+		assertTrue(invalidationCause is GattOperationException.TimedOut)
+
+		val afterTimeout = queue.execute(
+			"after timeout",
+			ExpectedGattCallback(GattCallbackType.MTU_CHANGED),
+		) { true }
+		assertTrue(afterTimeout.exceptionOrNull() is GattOperationException.QueueClosed)
 	}
 
 	@Test
@@ -162,6 +178,7 @@ class GattOperationQueueTest {
 		val token = Any()
 		val key = GattAttributeKey(
 			serviceUuid = UUID.randomUUID(),
+			serviceInstanceId = 1,
 			characteristicUuid = UUID.randomUUID(),
 			instanceId = 1,
 		)
@@ -179,7 +196,20 @@ class GattOperationQueueTest {
 		assertFalse(queue.onCallback(success(Any(), GattCallbackType.CHARACTERISTIC_READ, key)))
 		assertFalse(
 			queue.onCallback(
-				success(token, GattCallbackType.CHARACTERISTIC_READ, key.copy(instanceId = 2)),
+				success(
+					token,
+					GattCallbackType.CHARACTERISTIC_READ,
+					key.copy(serviceInstanceId = 2),
+				),
+			)
+		)
+		assertFalse(
+			queue.onCallback(
+				success(
+					token,
+					GattCallbackType.CHARACTERISTIC_READ,
+					key.copy(instanceId = 2),
+				),
 			)
 		)
 		assertFalse(result.isCompleted)
