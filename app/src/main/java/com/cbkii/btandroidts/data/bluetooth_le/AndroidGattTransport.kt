@@ -21,8 +21,6 @@ internal class AndroidGattTransport(
 
 	fun requestMtu(mtu: Int): Boolean = gatt.requestMtu(mtu)
 
-	fun reconnect(): Boolean = gatt.connect()
-
 	fun disconnect() = gatt.disconnect()
 
 	fun close() = gatt.close()
