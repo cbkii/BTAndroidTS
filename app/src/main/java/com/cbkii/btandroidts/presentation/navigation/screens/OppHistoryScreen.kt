@@ -67,7 +67,7 @@ fun OppHistoryScreen(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { launcher.launch("*/*") },
-                icon = { Icon(Icons.Filled.Send, contentDescription = stringResource(R.string.action_send_file)) },
+                icon = { Icon(Icons.Filled.Send, contentDescription = null) },
                 text = { Text(stringResource(R.string.action_send_file)) },
                 modifier = Modifier.padding(end = navBarWidth)
             )
@@ -124,7 +124,7 @@ fun OppHistoryScreenPreview() {
             floatingActionButton = {
                 ExtendedFloatingActionButton(
                     onClick = { },
-                    icon = { Icon(Icons.Filled.Send, contentDescription = stringResource(R.string.action_send_file)) },
+                    icon = { Icon(Icons.Filled.Send, contentDescription = null) },
                     text = { Text(stringResource(R.string.action_send_file)) },
                     modifier = Modifier.padding(end = navBarWidth)
                 )
