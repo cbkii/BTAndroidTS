@@ -1,18 +1,41 @@
 package com.cbkii.btandroidts.presentation.feature_devices
 
 import android.os.Build
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MenuOpen
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -20,47 +43,22 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewLightDark
-import androidx.compose.ui.tooling.preview.PreviewParameter
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Devices
-import androidx.compose.material.icons.filled.BugReport
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MenuOpen
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
-import androidx.compose.material3.Surface
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.datasource.CollectionPreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import com.cbkii.btandroidts.R
@@ -254,8 +252,6 @@ private fun BTDevicesContent(
 	}
 }
 
-
-@Suppress("DEPRECATION")
 @Composable
 fun Ts18ActionSidebar(
 	collapsed: Boolean,
@@ -264,10 +260,9 @@ fun Ts18ActionSidebar(
 	modifier: Modifier = Modifier,
 ) {
 	val scrollState = rememberScrollState()
-
-	// Calculate responsive width
 	val textMeasurer = rememberTextMeasurer()
 	val density = LocalDensity.current
+	val labelTextStyle = MaterialTheme.typography.labelLarge
 
 	val labels = listOf(
 		R.string.ts18_dashboard_phone_auto,
@@ -283,34 +278,37 @@ fun Ts18ActionSidebar(
 		R.string.ble_server_title
 	).map { stringResource(id = it) }
 
-	val maxLabelWidthDp = remember(labels, density) {
+	val maxLabelWidthDp = remember(labels, density, labelTextStyle) {
 		with(density) {
-			labels.maxOfOrNull { textMeasurer.measure(it).size.width }?.toDp() ?: 0.dp
+			labels.maxOfOrNull { label ->
+				textMeasurer.measure(
+					text = label,
+					style = labelTextStyle,
+				).size.width
+			}?.toDp() ?: 0.dp
 		}
 	}
 
 	val iconWidth = 24.dp
-	val horizontalPadding = 32.dp // 16dp start + 16dp end
+	val horizontalPadding = 32.dp
 	val iconTextSpacing = 16.dp
 	val expandedRequiredWidth = maxLabelWidthDp + iconWidth + horizontalPadding + iconTextSpacing
 
-	androidx.compose.foundation.layout.Box(modifier = modifier.fillMaxHeight()) {
+	Box(modifier = modifier.fillMaxHeight()) {
 		val collapsedWidth = 80.dp
 		val expandedWidth = expandedRequiredWidth
 			.coerceAtLeast(150.dp)
 			.coerceAtMost(350.dp)
-
 		val actualWidth = if (collapsed) collapsedWidth else expandedWidth
 
 		Surface(
 			modifier = Modifier
 				.width(actualWidth)
 				.fillMaxHeight(),
-			color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
-            tonalElevation = 3.dp
+			color = MaterialTheme.colorScheme.surface,
+			tonalElevation = 3.dp
 		) {
 			Column(modifier = Modifier.fillMaxSize()) {
-				// Header
 				Row(
 					modifier = Modifier
 						.fillMaxWidth()
@@ -336,17 +334,39 @@ fun Ts18ActionSidebar(
 						.weight(1f)
 						.verticalScroll(scrollState)
 				) {
-					SidebarItem(collapsed, Icons.Default.Phone, R.string.ts18_dashboard_phone_auto) { onAction(Ts18DashboardAction.PHONE_AUTO) }
-					SidebarItem(collapsed, Icons.Default.Devices, R.string.ts18_dashboard_peripherals) { onAction(Ts18DashboardAction.PERIPHERALS) }
-					SidebarItem(collapsed, Icons.Filled.Send, R.string.ts18_dashboard_file_share) { onAction(Ts18DashboardAction.FILE_SHARING) }
-					SidebarItem(collapsed, Icons.Default.Warning, R.string.ts18_dashboard_supervision) { onAction(Ts18DashboardAction.SUPERVISION) }
-					SidebarItem(collapsed, Icons.Default.BugReport, R.string.ts18_dashboard_diagnostics) { onAction(Ts18DashboardAction.DIAGNOSTICS) }
-					SidebarItem(collapsed, Icons.Default.Keyboard, R.string.keyboard_test_title) { onAction(Ts18DashboardAction.KEYBOARD_TEST) }
-					SidebarItem(collapsed, Icons.Default.Phone, R.string.phone_keyboard_title) { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) }
-					SidebarItem(collapsed, Icons.Default.Settings, R.string.settings_route_title) { onAction(Ts18DashboardAction.SETTINGS) }
-					SidebarItem(collapsed, Icons.Default.Info, R.string.about_route_title) { onAction(Ts18DashboardAction.ABOUT) }
-					SidebarItem(collapsed, Icons.Default.Build, R.string.bt_server_route) { onAction(Ts18DashboardAction.BT_SERVER) }
-					SidebarItem(collapsed, Icons.Default.Bluetooth, R.string.ble_server_title) { onAction(Ts18DashboardAction.BLE_SERVER) }
+					SidebarItem(collapsed, Icons.Default.Phone, R.string.ts18_dashboard_phone_auto) {
+						onAction(Ts18DashboardAction.PHONE_AUTO)
+					}
+					SidebarItem(collapsed, Icons.Default.Devices, R.string.ts18_dashboard_peripherals) {
+						onAction(Ts18DashboardAction.PERIPHERALS)
+					}
+					SidebarItem(collapsed, Icons.Filled.Send, R.string.ts18_dashboard_file_share) {
+						onAction(Ts18DashboardAction.FILE_SHARING)
+					}
+					SidebarItem(collapsed, Icons.Default.Warning, R.string.ts18_dashboard_supervision) {
+						onAction(Ts18DashboardAction.SUPERVISION)
+					}
+					SidebarItem(collapsed, Icons.Default.BugReport, R.string.ts18_dashboard_diagnostics) {
+						onAction(Ts18DashboardAction.DIAGNOSTICS)
+					}
+					SidebarItem(collapsed, Icons.Default.Keyboard, R.string.keyboard_test_title) {
+						onAction(Ts18DashboardAction.KEYBOARD_TEST)
+					}
+					SidebarItem(collapsed, Icons.Default.Phone, R.string.phone_keyboard_title) {
+						onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT)
+					}
+					SidebarItem(collapsed, Icons.Default.Settings, R.string.settings_route_title) {
+						onAction(Ts18DashboardAction.SETTINGS)
+					}
+					SidebarItem(collapsed, Icons.Default.Info, R.string.about_route_title) {
+						onAction(Ts18DashboardAction.ABOUT)
+					}
+					SidebarItem(collapsed, Icons.Default.Build, R.string.bt_server_route) {
+						onAction(Ts18DashboardAction.BT_SERVER)
+					}
+					SidebarItem(collapsed, Icons.Default.Bluetooth, R.string.ble_server_title) {
+						onAction(Ts18DashboardAction.BLE_SERVER)
+					}
 				}
 			}
 		}
@@ -360,30 +380,38 @@ private fun SidebarItem(
 	labelRes: Int,
 	onClick: () -> Unit,
 ) {
+	val label = stringResource(labelRes)
+
 	Row(
 		modifier = Modifier
 			.fillMaxWidth()
-			.clickable(onClick = onClick)
+			.clickable(
+				role = Role.Button,
+				onClick = onClick,
+			)
 			.padding(vertical = 16.dp, horizontal = if (collapsed) 0.dp else 16.dp),
-		verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+		verticalAlignment = Alignment.CenterVertically,
 		horizontalArrangement = if (collapsed) Arrangement.Center else Arrangement.Start
 	) {
 		Icon(
 			imageVector = icon,
-			contentDescription = stringResource(labelRes),
+			contentDescription = if (collapsed) label else null,
 			modifier = Modifier.size(24.dp)
 		)
 		if (!collapsed) {
 			Spacer(modifier = Modifier.width(16.dp))
 			Text(
-				text = stringResource(labelRes),
+				text = label,
 				modifier = Modifier.fillMaxWidth(),
-				textAlign = androidx.compose.ui.text.style.TextAlign.Start,
-				style = androidx.compose.material3.MaterialTheme.typography.labelLarge
+				textAlign = TextAlign.Start,
+				style = MaterialTheme.typography.labelLarge,
+				maxLines = 1,
+				overflow = TextOverflow.Ellipsis,
 			)
 		}
 	}
 }
+
 enum class Ts18DashboardAction {
 	PHONE_AUTO,
 	PERIPHERALS,
@@ -397,8 +425,6 @@ enum class Ts18DashboardAction {
 	BT_SERVER,
 	BLE_SERVER
 }
-
-
 
 private class BTDeviceClassicalScreenStateParams :
 	CollectionPreviewParameterProvider<BTDevicesScreenState>(
@@ -425,13 +451,13 @@ private fun BTDeviceRouteWithClassicDevicesPreview(
 	)
 }
 
-class BTDevicesLEScreenStateParams
-	: CollectionPreviewParameterProvider<BTDevicesScreenState>(
-	listOf(
-		PreviewFakes.FAKE_DEVICE_STATE_WITH_NO_DEVICE,
-		PreviewFakes.FAKE_DEVICE_STATE_WITH_SOME_BLE_DEVICES,
+class BTDevicesLEScreenStateParams :
+	CollectionPreviewParameterProvider<BTDevicesScreenState>(
+		listOf(
+			PreviewFakes.FAKE_DEVICE_STATE_WITH_NO_DEVICE,
+			PreviewFakes.FAKE_DEVICE_STATE_WITH_SOME_BLE_DEVICES,
+		)
 	)
-)
 
 @Preview(showBackground = true, widthDp = 1280, heightDp = 720)
 @Composable
