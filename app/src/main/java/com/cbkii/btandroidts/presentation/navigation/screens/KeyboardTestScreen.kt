@@ -1,7 +1,10 @@
 package com.cbkii.btandroidts.presentation.navigation.screens
 
+import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.ui.res.stringResource
+import com.cbkii.btandroidts.R
 import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -39,13 +42,13 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
     val context = LocalContext.current
     var text by remember { mutableStateOf("") }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Keyboard Test") }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.keyboard_test_title)) }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
         Row(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = 55.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx ->
                         android.widget.EditText(ctx).apply {
-                            hint = "Type here..."
+                            hint = ctx.getString(R.string.keyboard_test_placeholder)
                             isFocusable = true
                             isFocusableInTouchMode = true
                             post { requestFocus() }
@@ -76,15 +79,15 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
                             Log.e(KEYBOARD_TEST_TAG, "Unable to open Android settings fallback", settingsError)
                         }
                     }
-                }) { Text("Settings") }
+                }) { Text(stringResource(R.string.keyboard_test_settings_button)) }
             }
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Detected Input Devices", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.keyboard_test_detected_devices), style = MaterialTheme.typography.titleMedium)
                 state.inputDevices.forEach { device ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(8.dp)) {
                             Text(device.name, style = MaterialTheme.typography.bodyMedium)
-                            Text("Type: ${if (device.isKeyboard) "Keyboard" else "Other"}", style = MaterialTheme.typography.labelSmall)
+                            Text(if (device.isKeyboard) stringResource(R.string.keyboard_test_type_keyboard) else stringResource(R.string.keyboard_test_type_other), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -101,7 +104,10 @@ data class KeyboardTestState(
     val message: String? = null,
 )
 
-class KeyboardTestViewModel(private val inputDeviceRepository: InputDeviceRepository, private val inventoryRepository: BluetoothDeviceInventoryRepository) : ViewModel() {
+class KeyboardTestViewModel(
+    private val inputDeviceRepository: InputDeviceRepository,
+    private val inventoryRepository: BluetoothDeviceInventoryRepository
+) : ViewModel() {
     private val _state = MutableStateFlow(KeyboardTestState())
     val state: StateFlow<KeyboardTestState> = _state.asStateFlow()
     private var refreshJob: Job? = null
