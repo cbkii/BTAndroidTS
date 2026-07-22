@@ -12,12 +12,12 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import com.cbkii.btandroidts.R
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.domain.peripheral.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -42,7 +42,7 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
     val context = LocalContext.current
     var text by remember { mutableStateOf("") }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Keyboard Test") }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.keyboard_test_title)) }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
         Row(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = 55.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 androidx.compose.ui.viewinterop.AndroidView(
@@ -91,7 +91,14 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(8.dp)) {
                             Text(device.name, style = MaterialTheme.typography.bodyMedium)
-                            Text("Type: ${if (device.isKeyboard) stringResource(R.string.keyboard_test_type_keyboard) else stringResource(R.string.keyboard_test_type_other)}", style = MaterialTheme.typography.labelSmall)
+                            val deviceType = stringResource(
+                                if (device.isKeyboard) R.string.keyboard_test_type_keyboard
+                                else R.string.keyboard_test_type_other
+                            )
+                            Text(
+                                stringResource(R.string.keyboard_test_device_type, deviceType),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
                         }
                     }
                 }
