@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -60,6 +61,7 @@ fun StartServerBox(
 		Spacer(modifier = Modifier.height(12.dp))
 		FilledTonalButton(
 			onClick = onStartServer,
+			modifier = Modifier.defaultMinSize(minHeight = 48.dp),
 			shape = MaterialTheme.shapes.medium,
 			colors = ButtonDefaults.filledTonalButtonColors(
 				containerColor = MaterialTheme.colorScheme.primaryContainer,

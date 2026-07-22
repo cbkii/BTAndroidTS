@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -50,6 +52,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -247,6 +254,7 @@ private fun BTDevicesContent(
 	}
 }
 
+
 @Suppress("DEPRECATION")
 @Composable
 fun Ts18ActionSidebar(
@@ -257,50 +265,93 @@ fun Ts18ActionSidebar(
 ) {
 	val scrollState = rememberScrollState()
 
-	BoxWithConstraints(modifier = modifier.fillMaxHeight()) {
+	// Calculate responsive width
+	val textMeasurer = rememberTextMeasurer()
+	val density = LocalDensity.current
+
+	val labels = listOf(
+		R.string.ts18_dashboard_phone_auto,
+		R.string.ts18_dashboard_peripherals,
+		R.string.ts18_dashboard_file_share,
+		R.string.ts18_dashboard_supervision,
+		R.string.ts18_dashboard_diagnostics,
+		R.string.keyboard_test_title,
+		R.string.phone_keyboard_title,
+		R.string.settings_route_title,
+		R.string.about_route_title,
+		R.string.bt_server_route,
+		R.string.ble_server_title
+	).map { stringResource(id = it) }
+
+	val maxLabelWidthDp = remember(labels, density) {
+		with(density) {
+			labels.maxOfOrNull { textMeasurer.measure(it).size.width }?.toDp() ?: 0.dp
+		}
+	}
+
+	val iconWidth = 24.dp
+	val horizontalPadding = 32.dp // 16dp start + 16dp end
+	val iconTextSpacing = 16.dp
+	val expandedRequiredWidth = maxLabelWidthDp + iconWidth + horizontalPadding + iconTextSpacing
+
+	androidx.compose.foundation.layout.Box(modifier = modifier.fillMaxHeight()) {
 		val collapsedWidth = 80.dp
-		val expandedWidth = (maxWidth * 0.40f)
-			.coerceAtLeast(collapsedWidth)
+		val expandedWidth = expandedRequiredWidth
+			.coerceAtLeast(150.dp)
 			.coerceAtMost(350.dp)
+
 		val actualWidth = if (collapsed) collapsedWidth else expandedWidth
 
-		NavigationRail(
+		Surface(
 			modifier = Modifier
 				.width(actualWidth)
 				.fillMaxHeight(),
-			header = {
-				IconButton(onClick = { onCollapsedChange(!collapsed) }) {
-					Icon(
-						imageVector = if (collapsed) Icons.Default.Menu else Icons.Filled.MenuOpen,
-						contentDescription = stringResource(
-							id = if (collapsed) R.string.navigation_expand else R.string.navigation_collapse
-						)
-					)
-				}
-			}
+			color = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+            tonalElevation = 3.dp
 		) {
-			Column(
-				modifier = Modifier
-					.fillMaxHeight()
-					.verticalScroll(scrollState)
-			) {
-				SidebarItem(collapsed, Icons.Default.Phone, R.string.ts18_dashboard_phone_auto) { onAction(Ts18DashboardAction.PHONE_AUTO) }
-				SidebarItem(collapsed, Icons.Default.Devices, R.string.ts18_dashboard_peripherals) { onAction(Ts18DashboardAction.PERIPHERALS) }
-				SidebarItem(collapsed, Icons.Filled.Send, R.string.ts18_dashboard_file_share) { onAction(Ts18DashboardAction.FILE_SHARING) }
-				SidebarItem(collapsed, Icons.Default.Warning, R.string.ts18_dashboard_supervision) { onAction(Ts18DashboardAction.SUPERVISION) }
-				SidebarItem(collapsed, Icons.Default.BugReport, R.string.ts18_dashboard_diagnostics) { onAction(Ts18DashboardAction.DIAGNOSTICS) }
-				SidebarItem(collapsed, Icons.Default.Keyboard, R.string.keyboard_test_title) { onAction(Ts18DashboardAction.KEYBOARD_TEST) }
-				SidebarItem(collapsed, Icons.Default.Phone, R.string.phone_keyboard_title) { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) }
-				SidebarItem(collapsed, Icons.Default.Settings, R.string.settings_route_title) { onAction(Ts18DashboardAction.SETTINGS) }
-				SidebarItem(collapsed, Icons.Default.Info, R.string.about_route_title) { onAction(Ts18DashboardAction.ABOUT) }
-				SidebarItem(collapsed, Icons.Default.Build, R.string.bt_server_route) { onAction(Ts18DashboardAction.BT_SERVER) }
-				SidebarItem(collapsed, Icons.Default.Bluetooth, R.string.ble_server_title) { onAction(Ts18DashboardAction.BLE_SERVER) }
+			Column(modifier = Modifier.fillMaxSize()) {
+				// Header
+				Row(
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(top = 12.dp, bottom = 12.dp),
+					horizontalArrangement = if (collapsed) Arrangement.Center else Arrangement.Start
+				) {
+					IconButton(
+						onClick = { onCollapsedChange(!collapsed) },
+						modifier = if (!collapsed) Modifier.padding(start = 16.dp) else Modifier
+					) {
+						Icon(
+							imageVector = if (collapsed) Icons.Default.Menu else Icons.Filled.MenuOpen,
+							contentDescription = stringResource(
+								id = if (collapsed) R.string.navigation_expand else R.string.navigation_collapse
+							)
+						)
+					}
+				}
+
+				Column(
+					modifier = Modifier
+						.fillMaxWidth()
+						.weight(1f)
+						.verticalScroll(scrollState)
+				) {
+					SidebarItem(collapsed, Icons.Default.Phone, R.string.ts18_dashboard_phone_auto) { onAction(Ts18DashboardAction.PHONE_AUTO) }
+					SidebarItem(collapsed, Icons.Default.Devices, R.string.ts18_dashboard_peripherals) { onAction(Ts18DashboardAction.PERIPHERALS) }
+					SidebarItem(collapsed, Icons.Filled.Send, R.string.ts18_dashboard_file_share) { onAction(Ts18DashboardAction.FILE_SHARING) }
+					SidebarItem(collapsed, Icons.Default.Warning, R.string.ts18_dashboard_supervision) { onAction(Ts18DashboardAction.SUPERVISION) }
+					SidebarItem(collapsed, Icons.Default.BugReport, R.string.ts18_dashboard_diagnostics) { onAction(Ts18DashboardAction.DIAGNOSTICS) }
+					SidebarItem(collapsed, Icons.Default.Keyboard, R.string.keyboard_test_title) { onAction(Ts18DashboardAction.KEYBOARD_TEST) }
+					SidebarItem(collapsed, Icons.Default.Phone, R.string.phone_keyboard_title) { onAction(Ts18DashboardAction.PHONE_KEYBOARD_COMPAT) }
+					SidebarItem(collapsed, Icons.Default.Settings, R.string.settings_route_title) { onAction(Ts18DashboardAction.SETTINGS) }
+					SidebarItem(collapsed, Icons.Default.Info, R.string.about_route_title) { onAction(Ts18DashboardAction.ABOUT) }
+					SidebarItem(collapsed, Icons.Default.Build, R.string.bt_server_route) { onAction(Ts18DashboardAction.BT_SERVER) }
+					SidebarItem(collapsed, Icons.Default.Bluetooth, R.string.ble_server_title) { onAction(Ts18DashboardAction.BLE_SERVER) }
+				}
 			}
 		}
 	}
 }
-
-
 
 @Composable
 private fun SidebarItem(
@@ -309,31 +360,30 @@ private fun SidebarItem(
 	labelRes: Int,
 	onClick: () -> Unit,
 ) {
-	NavigationRailItem(
-		icon = {
-			Icon(
-				imageVector = icon,
-				contentDescription = stringResource(labelRes)
+	Row(
+		modifier = Modifier
+			.fillMaxWidth()
+			.clickable(onClick = onClick)
+			.padding(vertical = 16.dp, horizontal = if (collapsed) 0.dp else 16.dp),
+		verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+		horizontalArrangement = if (collapsed) Arrangement.Center else Arrangement.Start
+	) {
+		Icon(
+			imageVector = icon,
+			contentDescription = stringResource(labelRes),
+			modifier = Modifier.size(24.dp)
+		)
+		if (!collapsed) {
+			Spacer(modifier = Modifier.width(16.dp))
+			Text(
+				text = stringResource(labelRes),
+				modifier = Modifier.fillMaxWidth(),
+				textAlign = androidx.compose.ui.text.style.TextAlign.Start,
+				style = androidx.compose.material3.MaterialTheme.typography.labelLarge
 			)
-		},
-		label = if (!collapsed) {
-			{
-				Text(
-					text = stringResource(labelRes),
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-					modifier = Modifier.fillMaxWidth(),
-					textAlign = androidx.compose.ui.text.style.TextAlign.Start
-				)
-			}
-		} else {
-			null
-		},
-		selected = false,
-		onClick = onClick,
-	)
+		}
+	}
 }
-
 enum class Ts18DashboardAction {
 	PHONE_AUTO,
 	PERIPHERALS,
@@ -387,6 +437,22 @@ class BTDevicesLEScreenStateParams
 @Composable
 private fun BTDeviceRouteWithLEDevicesPreview(
 	@PreviewParameter(BTDevicesLEScreenStateParams::class)
+	state: BTDevicesScreenState
+) = BTAndroidTSTheme {
+	BTDevicesRoute(
+		isBTActive = true,
+		isScanning = false,
+		state = state,
+		onEvent = {},
+		onSelectDevice = { },
+		onSelectLeDevice = { }
+	)
+}
+
+@Preview(showBackground = true, widthDp = 1225, heightDp = 720)
+@Composable
+private fun BTDeviceRouteNarrowerPreview(
+	@PreviewParameter(BTDeviceClassicalScreenStateParams::class)
 	state: BTDevicesScreenState
 ) = BTAndroidTSTheme {
 	BTDevicesRoute(

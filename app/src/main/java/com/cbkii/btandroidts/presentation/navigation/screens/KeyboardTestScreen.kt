@@ -8,9 +8,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.cbkii.btandroidts.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -45,7 +48,7 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
                 androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx ->
                         android.widget.EditText(ctx).apply {
-                            hint = "Type here..."
+                            hint = ctx.getString(R.string.keyboard_test_type_here)
                             isFocusable = true
                             isFocusableInTouchMode = true
                             post { requestFocus() }
@@ -76,15 +79,19 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
                             Log.e(KEYBOARD_TEST_TAG, "Unable to open Android settings fallback", settingsError)
                         }
                     }
-                }) { Text("Settings") }
+                }, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
+                    Icon(Icons.Default.Settings, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.settings_tooltip_text))
+                }
             }
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Detected Input Devices", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.keyboard_test_detected_devices), style = MaterialTheme.typography.titleMedium)
                 state.inputDevices.forEach { device ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(8.dp)) {
                             Text(device.name, style = MaterialTheme.typography.bodyMedium)
-                            Text("Type: ${if (device.isKeyboard) "Keyboard" else "Other"}", style = MaterialTheme.typography.labelSmall)
+                            Text("Type: ${if (device.isKeyboard) stringResource(R.string.keyboard_test_type_keyboard) else stringResource(R.string.keyboard_test_type_other)}", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -61,13 +62,16 @@ fun OppHistoryScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { launcher.launch("*/*") }) {
-                Text(stringResource(R.string.action_send_file))
-            }
+            ExtendedFloatingActionButton(
+                onClick = { launcher.launch("*/*") },
+                icon = { Icon(Icons.Filled.Send, contentDescription = stringResource(R.string.action_send_file)) },
+                text = { Text(stringResource(R.string.action_send_file)) },
+                modifier = Modifier.padding(end = 55.dp)
+            )
         },
         topBar = {
             TopAppBar(
-                title = { Text("Transfer History") },
+                title = { Text(stringResource(R.string.opp_history_title)) },
                 navigationIcon = {
                     IconButton(onClick = { navigator.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = null)
@@ -82,18 +86,69 @@ fun OppHistoryScreen(
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             item {
-                Text("Outbound transfers delegated to stock Android Bluetooth.", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.opp_history_outbound_desc), style = MaterialTheme.typography.bodySmall)
             }
 
             items(state.history) { item ->
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Transfer ${item.id.take(8)}", style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(R.string.opp_history_transfer, item.id.take(8)), style = MaterialTheme.typography.titleSmall)
                             Text(dateFormat.format(Date(item.createdAtMillis)), style = MaterialTheme.typography.labelSmall)
                         }
                         Text(item.summary, style = MaterialTheme.typography.bodyMedium)
-                        Text("Status: ${item.state}", style = MaterialTheme.typography.bodySmall, color = if (item.state == OppTransferState.COMPLETED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        Text(stringResource(R.string.opp_history_status, item.state), style = MaterialTheme.typography.bodySmall, color = if (item.state == OppTransferState.COMPLETED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@androidx.compose.ui.tooling.preview.Preview(widthDp = 1280, heightDp = 720, showBackground = true)
+@Composable
+fun OppHistoryScreenPreview() {
+    com.cbkii.btandroidts.ui.theme.BTAndroidTSTheme {
+        Scaffold(
+            floatingActionButton = {
+                ExtendedFloatingActionButton(
+                    onClick = { },
+                    icon = { Icon(Icons.Filled.Send, contentDescription = stringResource(R.string.action_send_file)) },
+                    text = { Text(stringResource(R.string.action_send_file)) },
+                    modifier = Modifier.padding(end = 55.dp)
+                )
+            },
+            topBar = {
+                @OptIn(ExperimentalMaterial3Api::class)
+                TopAppBar(
+                    title = { Text(stringResource(R.string.opp_history_title)) },
+                    navigationIcon = {
+                        IconButton(onClick = { }) {
+                            Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = null)
+                        }
+                    }
+                )
+            }
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = 55.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                item {
+                    Text(stringResource(R.string.opp_history_outbound_desc), style = MaterialTheme.typography.bodySmall)
+                }
+
+                items(3) { index ->
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(stringResource(R.string.opp_history_transfer, "1a2b3c4d"), style = MaterialTheme.typography.titleSmall)
+                                Text("Dec 31, 2024, 11:59:59 PM", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Text("Summary of transfer $index", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.opp_history_status, com.cbkii.btandroidts.domain.peripheral.OppTransferState.COMPLETED), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }

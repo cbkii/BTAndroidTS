@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -55,6 +56,7 @@ fun StartBLEServer(
 		Spacer(modifier = Modifier.height(12.dp))
 		Button(
 			onClick = onStartServer,
+			modifier = Modifier.defaultMinSize(minHeight = 48.dp),
 			shape = MaterialTheme.shapes.large,
 			colors = ButtonDefaults.buttonColors(
 				containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -68,6 +70,7 @@ fun StartBLEServer(
 		}
 		FilledTonalButton(
 			onClick = onConfigureServices,
+			modifier = Modifier.defaultMinSize(minHeight = 48.dp),
 			shape = MaterialTheme.shapes.large,
 		) {
 			Text(
