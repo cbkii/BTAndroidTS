@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -40,10 +41,10 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
     val viewModel = koinViewModel<KeyboardTestViewModel>()
     val state by viewModel.state.collectAsState(KeyboardTestState())
     val context = LocalContext.current
-    var text by remember { mutableStateOf("") }
+    val navBarWidth = dimensionResource(R.dimen.ts18_nav_bar_width)
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.keyboard_test_title)) }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
-        Row(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = 55.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        Row(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = navBarWidth), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx ->
