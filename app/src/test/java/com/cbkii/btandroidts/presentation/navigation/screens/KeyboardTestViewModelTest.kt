@@ -19,12 +19,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
@@ -78,7 +78,7 @@ class KeyboardTestViewModelTest {
     }
 
     @Test
-    fun `initial refresh publishes enumerated input devices`() = runTest {
+    fun `initial refresh publishes enumerated input devices`() = runBlocking {
         val keyboard = AndroidInputDeviceInfo(
             id = 7,
             name = "Test keyboard",
@@ -90,28 +90,34 @@ class KeyboardTestViewModelTest {
         val inputRepository = FakeInputDeviceRepository(devices = listOf(keyboard))
         val viewModel = KeyboardTestViewModel(inputRepository, FakeInventoryRepository())
 
-        val state = withTimeout(2_000) {
-            viewModel.state.first { it.inputDevices == listOf(keyboard) }
-        }
+        try {
+            val state = withTimeout(2_000) {
+                viewModel.state.first { it.inputDevices == listOf(keyboard) }
+            }
 
-        assertEquals(listOf(keyboard), state.inputDevices)
-        assertNull(state.message)
-        viewModel.viewModelScope.cancel()
+            assertEquals(listOf(keyboard), state.inputDevices)
+            assertNull(state.message)
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
     }
 
     @Test
-    fun `initial refresh failure exposes retryable error state`() = runTest {
+    fun `initial refresh failure exposes retryable error state`() = runBlocking {
         val inputRepository = FakeInputDeviceRepository(
             failure = IllegalStateException("enumeration failed"),
         )
         val viewModel = KeyboardTestViewModel(inputRepository, FakeInventoryRepository())
 
-        val state = withTimeout(2_000) {
-            viewModel.state.first { it.message == KeyboardTestMessage.RefreshFailed }
-        }
+        try {
+            val state = withTimeout(2_000) {
+                viewModel.state.first { it.message == KeyboardTestMessage.RefreshFailed }
+            }
 
-        assertEquals(KeyboardTestMessage.RefreshFailed, state.message)
-        viewModel.viewModelScope.cancel()
+            assertEquals(KeyboardTestMessage.RefreshFailed, state.message)
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
     }
 
     @Test
@@ -121,9 +127,12 @@ class KeyboardTestViewModelTest {
         )
         val viewModel = KeyboardTestViewModel(inputRepository, FakeInventoryRepository())
 
-        assertTrue(inputRepository.called.await(2, TimeUnit.SECONDS))
-        assertNull(viewModel.state.value.message)
-        viewModel.viewModelScope.cancel()
+        try {
+            assertTrue(inputRepository.called.await(2, TimeUnit.SECONDS))
+            assertNull(viewModel.state.value.message)
+        } finally {
+            viewModel.viewModelScope.cancel()
+        }
     }
 }
 
