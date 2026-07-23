@@ -39,7 +39,7 @@ import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 
 @OptIn(ExperimentalCoroutinesApi::class)
-private class MainDispatcherRule(
+class MainDispatcherRule(
     val dispatcher: TestDispatcher = UnconfinedTestDispatcher(),
 ) : TestWatcher() {
     override fun starting(description: Description) {
