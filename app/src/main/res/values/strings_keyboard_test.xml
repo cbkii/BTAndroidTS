@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="keyboard_test_error_refresh">Unable to refresh input devices; retry from Settings.</string>
+    <string name="keyboard_test_success_verified">Keyboard verified for %1$s.</string>
+    <string name="keyboard_test_error_no_match">No bonded keyboard matched this input; type again to retry.</string>
+    <string name="keyboard_test_error_multiple_match">Multiple bonded keyboards matched; narrow the target and retry.</string>
+    <string name="keyboard_test_error_persist_failed">Keyboard verification could not be saved; type again to retry.</string>
+</resources>
