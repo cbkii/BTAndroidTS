@@ -165,8 +165,8 @@ class KeyboardTestViewModel(private val inputDeviceRepository: InputDeviceReposi
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e(KEYBOARD_TEST_TAG, "Failed to refresh input devices", e)
                 _state.value = _state.value.copy(message = KeyboardTestMessage.RefreshFailed)
+                logKeyboardTestError("Failed to refresh input devices", e)
             }
         }
     }
@@ -207,15 +207,23 @@ class KeyboardTestViewModel(private val inputDeviceRepository: InputDeviceReposi
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e(KEYBOARD_TEST_TAG, "Failed to persist keyboard verification", e)
                 _state.value = _state.value.copy(
                     verificationAttempted = false,
                     message = KeyboardTestMessage.PersistenceFailed,
                 )
+                logKeyboardTestError("Failed to persist keyboard verification", e)
             } finally {
                 _state.value = _state.value.copy(verificationInProgress = false)
             }
         }
+    }
+}
+
+private fun logKeyboardTestError(message: String, throwable: Throwable) {
+    try {
+        Log.e(KEYBOARD_TEST_TAG, message, throwable)
+    } catch (_: RuntimeException) {
+        // Local JVM tests use android.jar stubs; state reporting must not depend on logging.
     }
 }
 
