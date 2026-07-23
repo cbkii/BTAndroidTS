@@ -17,6 +17,7 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.domain.peripheral.*
@@ -39,7 +40,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun KeyboardTest(navigator: DestinationsNavigator) {
     val viewModel = koinViewModel<KeyboardTestViewModel>()
-    val state by viewModel.state.collectAsState(KeyboardTestState())
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val navBarWidth = dimensionResource(R.dimen.ts18_nav_bar_width)
 
@@ -68,7 +69,13 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
-                state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                state.message?.let { message ->
+                    Text(
+                        text = message.asString(),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 Button(onClick = {
                     try {
                         context.startActivity(Intent(Settings.ACTION_HARD_KEYBOARD_SETTINGS))
@@ -108,12 +115,29 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
     }
 }
 
+@Composable
+private fun KeyboardTestMessage.asString(): String = when (this) {
+    KeyboardTestMessage.RefreshFailed -> stringResource(R.string.keyboard_test_error_refresh)
+    is KeyboardTestMessage.Verified -> stringResource(R.string.keyboard_test_success_verified, address)
+    KeyboardTestMessage.NoBondedMatch -> stringResource(R.string.keyboard_test_error_no_match)
+    KeyboardTestMessage.MultipleBondedMatches -> stringResource(R.string.keyboard_test_error_multiple_match)
+    KeyboardTestMessage.PersistenceFailed -> stringResource(R.string.keyboard_test_error_persist_failed)
+}
+
+sealed interface KeyboardTestMessage {
+    data object RefreshFailed : KeyboardTestMessage
+    data class Verified(val address: String) : KeyboardTestMessage
+    data object NoBondedMatch : KeyboardTestMessage
+    data object MultipleBondedMatches : KeyboardTestMessage
+    data object PersistenceFailed : KeyboardTestMessage
+}
+
 data class KeyboardTestState(
     val inputDevices: List<AndroidInputDeviceInfo> = emptyList(),
     val verificationInProgress: Boolean = false,
     val verificationAttempted: Boolean = false,
     val verifiedAddress: BluetoothAddress? = null,
-    val message: String? = null,
+    val message: KeyboardTestMessage? = null,
 )
 
 class KeyboardTestViewModel(private val inputDeviceRepository: InputDeviceRepository, private val inventoryRepository: BluetoothDeviceInventoryRepository) : ViewModel() {
@@ -133,12 +157,16 @@ class KeyboardTestViewModel(private val inputDeviceRepository: InputDeviceReposi
         refreshJob = viewModelScope.launch {
             try {
                 val inputs = withContext(Dispatchers.Default) { inputDeviceRepository.listInputDevices() }
-                _state.value = _state.value.copy(inputDevices = inputs)
+                val current = _state.value
+                _state.value = current.copy(
+                    inputDevices = inputs,
+                    message = current.message.takeUnless { it == KeyboardTestMessage.RefreshFailed },
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.e(KEYBOARD_TEST_TAG, "Failed to refresh input devices", e)
-                _state.value = _state.value.copy(message = "Unable to refresh input devices; retry from Settings.")
+                _state.value = _state.value.copy(message = KeyboardTestMessage.RefreshFailed)
             }
         }
     }
@@ -164,16 +192,16 @@ class KeyboardTestViewModel(private val inputDeviceRepository: InputDeviceReposi
                         _state.value = _state.value.copy(
                             verifiedAddress = address,
                             verificationAttempted = true,
-                            message = "Keyboard verified for ${address.value}.",
+                            message = KeyboardTestMessage.Verified(address.value),
                         )
                     }
                     0 -> _state.value = _state.value.copy(
                         verificationAttempted = false,
-                        message = "No bonded keyboard matched this input; type again to retry.",
+                        message = KeyboardTestMessage.NoBondedMatch,
                     )
                     else -> _state.value = _state.value.copy(
                         verificationAttempted = false,
-                        message = "Multiple bonded keyboards matched; narrow the target and retry.",
+                        message = KeyboardTestMessage.MultipleBondedMatches,
                     )
                 }
             } catch (e: CancellationException) {
@@ -182,7 +210,7 @@ class KeyboardTestViewModel(private val inputDeviceRepository: InputDeviceReposi
                 Log.e(KEYBOARD_TEST_TAG, "Failed to persist keyboard verification", e)
                 _state.value = _state.value.copy(
                     verificationAttempted = false,
-                    message = "Keyboard verification could not be saved; type again to retry.",
+                    message = KeyboardTestMessage.PersistenceFailed,
                 )
             } finally {
                 _state.value = _state.value.copy(verificationInProgress = false)
