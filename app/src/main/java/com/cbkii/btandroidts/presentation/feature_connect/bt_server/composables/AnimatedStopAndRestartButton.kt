@@ -8,6 +8,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,21 +53,21 @@ fun AnimatedStopAndRestartButton(
 		modifier = modifier,
 	) { state ->
 		when (state) {
-			ActionState.STOP_SERVER -> TextButton(onClick = onStop) {
+			ActionState.STOP_SERVER -> TextButton(onClick = onStop, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
 				Text(
 					text = stringResource(id = R.string.topbar_action_stop),
 					style = MaterialTheme.typography.titleMedium
 				)
 			}
 
-			ActionState.RESTART_SERVER -> TextButton(onClick = onRestart) {
+			ActionState.RESTART_SERVER -> TextButton(onClick = onRestart, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
 				Text(
 					text = stringResource(id = R.string.topbar_action_restart),
 					style = MaterialTheme.typography.titleMedium
 				)
 			}
 
-			else -> Box(modifier = Modifier.size(60.dp, 40.dp))
+			else -> Box(modifier = Modifier.size(60.dp, 48.dp))
 		}
 	}
 }

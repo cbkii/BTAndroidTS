@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="keyboard_test_device_type">Type: %1$s</string>
+
+  <string name="opp_transfer_state_queued">Queued</string>
+  <string name="opp_transfer_state_delegated_to_stock_opp">Delegated to stock Bluetooth</string>
+  <string name="opp_transfer_state_running">Running</string>
+  <string name="opp_transfer_state_cancelled">Cancelled</string>
+  <string name="opp_transfer_state_failed">Failed</string>
+  <string name="opp_transfer_state_completed">Completed</string>
+  <string name="opp_transfer_state_requires_device_validation">Requires TS18 validation</string>
+</resources>

@@ -288,4 +288,13 @@
   <string name="error_opp_transfer_failed">OPP transfer failed: %s</string>
   <string name="opp_transfer_success_toast">OPP transfer delegated successfully</string>
 
+
+  <string name="keyboard_test_type_here">Type here...</string>
+  <string name="keyboard_test_detected_devices">Detected Input Devices</string>
+  <string name="keyboard_test_type_keyboard">Keyboard</string>
+  <string name="keyboard_test_type_other">Other</string>
+  <string name="opp_history_title">Transfer History</string>
+  <string name="opp_history_outbound_desc">Outbound transfers delegated to stock Android Bluetooth.</string>
+  <string name="opp_history_status">Status: %s</string>
+  <string name="opp_history_transfer">Transfer %s</string>
 </resources>

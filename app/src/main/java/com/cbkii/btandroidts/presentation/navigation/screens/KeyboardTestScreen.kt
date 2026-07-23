@@ -8,13 +8,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cbkii.btandroidts.R
 import com.cbkii.btandroidts.domain.peripheral.*
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -37,15 +41,15 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
     val viewModel = koinViewModel<KeyboardTestViewModel>()
     val state by viewModel.state.collectAsState(KeyboardTestState())
     val context = LocalContext.current
-    var text by remember { mutableStateOf("") }
+    val navBarWidth = dimensionResource(R.dimen.ts18_nav_bar_width)
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Keyboard Test") }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
-        Row(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = 55.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.keyboard_test_title)) }, navigationIcon = { IconButton(onClick = { navigator.popBackStack() }) { Icon(Icons.AutoMirrored.Default.ArrowBack, null) } }) }) { padding ->
+        Row(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp).padding(end = navBarWidth), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx ->
                         android.widget.EditText(ctx).apply {
-                            hint = "Type here..."
+                            hint = ctx.getString(R.string.keyboard_test_type_here)
                             isFocusable = true
                             isFocusableInTouchMode = true
                             post { requestFocus() }
@@ -76,15 +80,26 @@ fun KeyboardTest(navigator: DestinationsNavigator) {
                             Log.e(KEYBOARD_TEST_TAG, "Unable to open Android settings fallback", settingsError)
                         }
                     }
-                }) { Text("Settings") }
+                }, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
+                    Icon(Icons.Default.Settings, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.settings_tooltip_text))
+                }
             }
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Detected Input Devices", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.keyboard_test_detected_devices), style = MaterialTheme.typography.titleMedium)
                 state.inputDevices.forEach { device ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(8.dp)) {
                             Text(device.name, style = MaterialTheme.typography.bodyMedium)
-                            Text("Type: ${if (device.isKeyboard) "Keyboard" else "Other"}", style = MaterialTheme.typography.labelSmall)
+                            val deviceType = stringResource(
+                                if (device.isKeyboard) R.string.keyboard_test_type_keyboard
+                                else R.string.keyboard_test_type_other
+                            )
+                            Text(
+                                stringResource(R.string.keyboard_test_device_type, deviceType),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
                         }
                     }
                 }
